@@ -33,6 +33,8 @@ export class MainScene extends Phaser.Scene {
   private dropInterval: number
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private gameOver: boolean
+  private textPool: Phaser.GameObjects.Text[] // Textオブジェクトのプール
+  private textPoolIndex: number // 現在使用中のプールインデックス
 
   constructor() {
     super({ key: 'MainScene' })
@@ -42,6 +44,8 @@ export class MainScene extends Phaser.Scene {
     this.dropTimer = 0
     this.dropInterval = 1000
     this.gameOver = false
+    this.textPool = []
+    this.textPoolIndex = 0
   }
 
   create() {
@@ -58,6 +62,20 @@ export class MainScene extends Phaser.Scene {
       fontSize: '24px',
       color: '#ffffff',
     })
+
+    // Textオブジェクトのプールを作成（最大ROWS * COLS + 1個）
+    const poolSize = ROWS * COLS + 1
+    for (let i = 0; i < poolSize; i++) {
+      const text = this.add.text(0, 0, '', {
+        fontSize: '32px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      })
+      text.setOrigin(0.5)
+      text.setStroke('#000000', 4)
+      text.setVisible(false)
+      this.textPool.push(text)
+    }
 
     // キーボード入力の設定
     this.cursors = this.input.keyboard!.createCursorKeys()
@@ -302,6 +320,10 @@ export class MainScene extends Phaser.Scene {
     this.graphics.clear()
     this.drawBackground()
 
+    // Textプールをリセット（全て非表示にする）
+    this.textPoolIndex = 0
+    this.textPool.forEach(text => text.setVisible(false))
+
     // ボードを描画
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
@@ -332,18 +354,15 @@ export class MainScene extends Phaser.Scene {
       BLOCK_SIZE - 4
     )
 
-    // 数字を描画
-    const text = this.add.text(
-      OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
-      OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2,
-      value.toString(),
-      {
-        fontSize: '32px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      }
-    )
-    text.setOrigin(0.5)
-    text.setStroke('#000000', 4)
+    // プールからTextオブジェクトを取得して再利用
+    if (this.textPoolIndex < this.textPool.length) {
+      const text = this.textPool[this.textPoolIndex++]
+      text.setText(value.toString())
+      text.setPosition(
+        OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
+        OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
+      )
+      text.setVisible(true)
+    }
   }
 }
