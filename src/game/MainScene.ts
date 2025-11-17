@@ -4,7 +4,7 @@ import Phaser from 'phaser'
 const COLS = 5
 const ROWS = 10
 const BLOCK_SIZE = 50
-const OFFSET_X = 50
+const OFFSET_X = 250 // 800px幅の中央に配置（200px右シフト）
 const OFFSET_Y = 50
 
 // 数字ごとの色定義
@@ -81,26 +81,26 @@ export class MainScene extends Phaser.Scene {
     // グラフィックスの作成
     this.graphics = this.add.graphics()
 
-    // スコア表示
-    this.scoreText = this.add.text(16, 16, 'Score: 0', {
+    // スコア表示（中央配置用に調整）
+    this.scoreText = this.add.text(216, 16, 'Score: 0', {
       fontSize: '24px',
       color: '#ffffff',
     })
 
     // ハイスコア表示
-    this.highScoreText = this.add.text(16, 45, `High: ${this.highScore}`, {
+    this.highScoreText = this.add.text(216, 45, `High: ${this.highScore}`, {
       fontSize: '18px',
       color: '#aaaaaa',
     })
 
     // レベル表示
-    this.levelText = this.add.text(16, 70, 'Level: 1', {
+    this.levelText = this.add.text(216, 70, 'Level: 1', {
       fontSize: '18px',
       color: '#00ff00',
     })
 
     // 連鎖表示
-    this.chainText = this.add.text(16, 95, '', {
+    this.chainText = this.add.text(216, 95, '', {
       fontSize: '20px',
       color: '#ffff00',
     })
@@ -122,8 +122,8 @@ export class MainScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setVisible(false)
 
-    // ネクスト表示
-    this.add.text(320, 16, 'Next:', {
+    // ネクスト表示（中央配置用に調整）
+    this.add.text(520, 16, 'Next:', {
       fontSize: '20px',
       color: '#ffffff',
     })
@@ -501,9 +501,9 @@ export class MainScene extends Phaser.Scene {
       )
     }
 
-    // ネクストブロック表示エリアの枠
+    // ネクストブロック表示エリアの枠（中央配置用に調整）
     this.graphics.lineStyle(2, 0x666666, 1)
-    this.graphics.strokeRect(310, 40, 70, 70)
+    this.graphics.strokeRect(510, 40, 70, 70)
   }
 
   private draw() {
@@ -560,15 +560,15 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawNextBlock() {
-    // ネクストブロックの背景
+    // ネクストブロックの背景（中央配置用に調整）
     this.graphics.fillStyle(COLORS[this.nextBlock], 1)
-    this.graphics.fillRect(320, 50, 50, 50)
+    this.graphics.fillRect(520, 50, 50, 50)
 
     // ネクストブロックの数字
     if (this.textPoolIndex < this.textPool.length) {
       const text = this.textPool[this.textPoolIndex++]
       text.setText(this.nextBlock.toString())
-      text.setPosition(345, 75)
+      text.setPosition(545, 75)
       text.setVisible(true)
     }
   }
