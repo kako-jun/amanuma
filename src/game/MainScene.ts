@@ -28,14 +28,23 @@ export class MainScene extends Phaser.Scene {
   } | null
   private graphics!: Phaser.GameObjects.Graphics
   private scoreText!: Phaser.GameObjects.Text
+  private highScoreText!: Phaser.GameObjects.Text
+  private levelText!: Phaser.GameObjects.Text
   private chainText!: Phaser.GameObjects.Text
+  private pauseText!: Phaser.GameObjects.Text
   private score: number
+  private highScore: number
+  private level: number
+  private linesCleared: number
   private chainCount: number
   private dropTimer: number
   private dropInterval: number
+  private baseDropInterval: number
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private rKey!: Phaser.Input.Keyboard.Key
+  private pKey!: Phaser.Input.Keyboard.Key
   private gameOver: boolean
+  private paused: boolean
   private textPool: Phaser.GameObjects.Text[] // Textオブジェクトのプール
   private textPoolIndex: number // 現在使用中のプールインデックス
   private nextBlock: number // 次のブロック
@@ -45,10 +54,15 @@ export class MainScene extends Phaser.Scene {
     this.board = []
     this.currentBlock = null
     this.score = 0
+    this.highScore = 0
+    this.level = 1
+    this.linesCleared = 0
     this.chainCount = 0
     this.dropTimer = 0
+    this.baseDropInterval = 1000
     this.dropInterval = 1000
     this.gameOver = false
+    this.paused = false
     this.textPool = []
     this.textPoolIndex = 0
     this.nextBlock = 0
@@ -60,6 +74,10 @@ export class MainScene extends Phaser.Scene {
       .fill(null)
       .map(() => Array(COLS).fill(0))
 
+    // ハイスコアを読み込み
+    const savedHighScore = localStorage.getItem('threeseven-highscore')
+    this.highScore = savedHighScore ? parseInt(savedHighScore, 10) : 0
+
     // グラフィックスの作成
     this.graphics = this.add.graphics()
 
@@ -69,11 +87,40 @@ export class MainScene extends Phaser.Scene {
       color: '#ffffff',
     })
 
+    // ハイスコア表示
+    this.highScoreText = this.add.text(16, 45, `High: ${this.highScore}`, {
+      fontSize: '18px',
+      color: '#aaaaaa',
+    })
+
+    // レベル表示
+    this.levelText = this.add.text(16, 70, 'Level: 1', {
+      fontSize: '18px',
+      color: '#00ff00',
+    })
+
     // 連鎖表示
-    this.chainText = this.add.text(16, 50, '', {
+    this.chainText = this.add.text(16, 95, '', {
       fontSize: '20px',
       color: '#ffff00',
     })
+
+    // 一時停止表示（非表示で作成）
+    this.pauseText = this.add
+      .text(
+        OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+        OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
+        'PAUSED\n\nPress P to Resume',
+        {
+          fontSize: '32px',
+          color: '#ffffff',
+          align: 'center',
+          backgroundColor: '#000000aa',
+          padding: { x: 20, y: 20 },
+        }
+      )
+      .setOrigin(0.5)
+      .setVisible(false)
 
     // ネクスト表示
     this.add.text(320, 16, 'Next:', {
@@ -100,6 +147,9 @@ export class MainScene extends Phaser.Scene {
     this.rKey = this.input.keyboard!.addKey(
       Phaser.Input.Keyboard.KeyCodes.R
     )
+    this.pKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.P
+    )
 
     // 最初のネクストブロックを生成
     this.nextBlock = Math.floor(Math.random() * 7) + 1
@@ -120,13 +170,19 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    // 一時停止のトグル
+    if (Phaser.Input.Keyboard.JustDown(this.pKey)) {
+      this.togglePause()
+      return
+    }
+
     // リスタート処理
     if (this.gameOver && Phaser.Input.Keyboard.JustDown(this.rKey)) {
       this.scene.restart()
       return
     }
 
-    if (this.gameOver) {
+    if (this.gameOver || this.paused) {
       return
     }
 
@@ -149,6 +205,11 @@ export class MainScene extends Phaser.Scene {
     this.draw()
   }
 
+  private togglePause() {
+    this.paused = !this.paused
+    this.pauseText.setVisible(this.paused)
+  }
+
   private spawnBlock() {
     // ネクストブロックを使用
     const value = this.nextBlock
@@ -164,6 +225,26 @@ export class MainScene extends Phaser.Scene {
     // ゲームオーバー判定
     if (this.board[0][this.currentBlock.x] !== 0) {
       this.gameOver = true
+
+      // ハイスコア更新
+      if (this.score > this.highScore) {
+        this.highScore = this.score
+        localStorage.setItem('threeseven-highscore', this.highScore.toString())
+        this.highScoreText.setText(`High: ${this.highScore}`)
+        this.add
+          .text(
+            OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+            OFFSET_Y + (ROWS * BLOCK_SIZE) / 2 - 80,
+            'NEW HIGH SCORE!',
+            {
+              fontSize: '24px',
+              color: '#ffff00',
+              align: 'center',
+            }
+          )
+          .setOrigin(0.5)
+      }
+
       this.add
         .text(
           OFFSET_X + (COLS * BLOCK_SIZE) / 2,
@@ -333,6 +414,21 @@ export class MainScene extends Phaser.Scene {
       // スコア加算
       this.score += toRemove.size * 10
       this.scoreText.setText(`Score: ${this.score}`)
+
+      // ライン消去数をカウント
+      this.linesCleared++
+
+      // 10ライン消去ごとにレベルアップ
+      const newLevel = Math.floor(this.linesCleared / 10) + 1
+      if (newLevel > this.level) {
+        this.level = newLevel
+        this.levelText.setText(`Level: ${this.level}`)
+        // レベルに応じて速度を上げる（最大2倍速）
+        this.dropInterval = Math.max(
+          this.baseDropInterval / (1 + (this.level - 1) * 0.1),
+          this.baseDropInterval / 2
+        )
+      }
 
       // 重力を適用
       this.applyGravity()
