@@ -1,82 +1,30 @@
 import Phaser from 'phaser'
 
 // ゲームの定数
-const COLS = 10
-const ROWS = 20
-const BLOCK_SIZE = 30
+const COLS = 5
+const ROWS = 10
+const BLOCK_SIZE = 50
 const OFFSET_X = 50
 const OFFSET_Y = 50
 
-// テトロミノの形状定義
-const SHAPES = [
-  // I型
-  [
-    [1, 1, 1, 1],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-  // O型
-  [
-    [1, 1, 0, 0],
-    [1, 1, 0, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-  // T型
-  [
-    [0, 1, 0, 0],
-    [1, 1, 1, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-  // S型
-  [
-    [0, 1, 1, 0],
-    [1, 1, 0, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-  // Z型
-  [
-    [1, 1, 0, 0],
-    [0, 1, 1, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-  // J型
-  [
-    [1, 0, 0, 0],
-    [1, 1, 1, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-  // L型
-  [
-    [0, 0, 1, 0],
-    [1, 1, 1, 0],
-    [0, 0, 0, 0],
-    [0, 0, 0, 0],
-  ],
-]
-
+// 数字ごとの色定義
 const COLORS = [
-  0x00ffff, // シアン (I)
-  0xffff00, // 黄色 (O)
-  0xff00ff, // マゼンタ (T)
-  0x00ff00, // 緑 (S)
-  0xff0000, // 赤 (Z)
-  0x0000ff, // 青 (J)
-  0xffa500, // オレンジ (L)
+  0x808080, // 0 (使用しない)
+  0xff0000, // 1 赤
+  0xff7f00, // 2 オレンジ
+  0xffff00, // 3 黄色
+  0x00ff00, // 4 緑
+  0x0000ff, // 5 青
+  0x4b0082, // 6 藍色
+  0x9400d3, // 7 紫
 ]
 
 export class MainScene extends Phaser.Scene {
-  private board: number[][]
-  private currentPiece: {
-    shape: number[][]
+  private board: number[][] // 0=空, 1-7=数字ブロック
+  private currentBlock: {
+    value: number
     x: number
     y: number
-    color: number
   } | null
   private graphics!: Phaser.GameObjects.Graphics
   private scoreText!: Phaser.GameObjects.Text
@@ -89,7 +37,7 @@ export class MainScene extends Phaser.Scene {
   constructor() {
     super({ key: 'MainScene' })
     this.board = []
-    this.currentPiece = null
+    this.currentBlock = null
     this.score = 0
     this.dropTimer = 0
     this.dropInterval = 1000
@@ -114,8 +62,8 @@ export class MainScene extends Phaser.Scene {
     // キーボード入力の設定
     this.cursors = this.input.keyboard!.createCursorKeys()
 
-    // 最初のピースを生成
-    this.spawnPiece()
+    // 最初のブロックを生成
+    this.spawnBlock()
 
     // ゲームループの開始
     this.time.addEvent({
@@ -143,9 +91,6 @@ export class MainScene extends Phaser.Scene {
     if (Phaser.Input.Keyboard.JustDown(this.cursors.right!)) {
       this.move(1)
     }
-    if (Phaser.Input.Keyboard.JustDown(this.cursors.up!)) {
-      this.rotate()
-    }
     if (this.cursors.down?.isDown) {
       if (this.dropTimer > 100) {
         this.drop()
@@ -156,69 +101,61 @@ export class MainScene extends Phaser.Scene {
     this.draw()
   }
 
-  private spawnPiece() {
-    const shapeIndex = Math.floor(Math.random() * SHAPES.length)
-    this.currentPiece = {
-      shape: SHAPES[shapeIndex],
-      x: Math.floor(COLS / 2) - 2,
+  private spawnBlock() {
+    // 1〜7のランダムな数字を生成
+    const value = Math.floor(Math.random() * 7) + 1
+    this.currentBlock = {
+      value: value,
+      x: Math.floor(COLS / 2),
       y: 0,
-      color: COLORS[shapeIndex],
     }
 
     // ゲームオーバー判定
-    if (this.collision(0, 0)) {
+    if (this.board[0][this.currentBlock.x] !== 0) {
       this.gameOver = true
       this.add
-        .text(200, 300, 'GAME OVER', {
-          fontSize: '48px',
-          color: '#ff0000',
-        })
+        .text(
+          OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+          OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
+          'GAME OVER',
+          {
+            fontSize: '48px',
+            color: '#ff0000',
+          }
+        )
         .setOrigin(0.5)
     }
   }
 
   private collision(offsetX: number, offsetY: number): boolean {
-    if (!this.currentPiece) return false
+    if (!this.currentBlock) return false
 
-    for (let y = 0; y < 4; y++) {
-      for (let x = 0; x < 4; x++) {
-        if (this.currentPiece.shape[y][x]) {
-          const newX = this.currentPiece.x + x + offsetX
-          const newY = this.currentPiece.y + y + offsetY
+    const newX = this.currentBlock.x + offsetX
+    const newY = this.currentBlock.y + offsetY
 
-          if (
-            newX < 0 ||
-            newX >= COLS ||
-            newY >= ROWS ||
-            (newY >= 0 && this.board[newY][newX])
-          ) {
-            return true
-          }
-        }
-      }
+    if (newX < 0 || newX >= COLS || newY >= ROWS) {
+      return true
     }
+
+    if (newY >= 0 && this.board[newY][newX] !== 0) {
+      return true
+    }
+
     return false
   }
 
   private merge() {
-    if (!this.currentPiece) return
+    if (!this.currentBlock) return
 
-    for (let y = 0; y < 4; y++) {
-      for (let x = 0; x < 4; x++) {
-        if (this.currentPiece.shape[y][x]) {
-          const boardY = this.currentPiece.y + y
-          const boardX = this.currentPiece.x + x
-          if (boardY >= 0) {
-            this.board[boardY][boardX] = this.currentPiece.color
-          }
-        }
-      }
+    const { x, y, value } = this.currentBlock
+    if (y >= 0 && y < ROWS) {
+      this.board[y][x] = value
     }
   }
 
   private move(dir: number) {
     if (!this.collision(dir, 0)) {
-      this.currentPiece!.x += dir
+      this.currentBlock!.x += dir
     }
   }
 
@@ -226,49 +163,121 @@ export class MainScene extends Phaser.Scene {
     if (this.gameOver) return
 
     if (!this.collision(0, 1)) {
-      this.currentPiece!.y++
+      this.currentBlock!.y++
     } else {
       this.merge()
-      this.clearLines()
-      this.spawnPiece()
+      this.checkAndClearSevens()
+      this.spawnBlock()
     }
   }
 
-  private rotate() {
-    if (!this.currentPiece) return
+  private checkAndClearSevens() {
+    const toRemove: Set<string> = new Set()
 
-    const rotated = this.currentPiece.shape[0].map((_, i) =>
-      this.currentPiece!.shape.map(row => row[i]).reverse()
-    )
+    // 横方向のチェック
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (this.board[y][x] === 0) continue
 
-    const previousShape = this.currentPiece.shape
-    this.currentPiece.shape = rotated
+        // 右方向への連続をチェック
+        const sequence: { x: number; y: number; value: number }[] = []
+        let sum = 0
+        for (let dx = 0; x + dx < COLS && this.board[y][x + dx] !== 0; dx++) {
+          const value = this.board[y][x + dx]
+          sequence.push({ x: x + dx, y, value })
+          sum += value
 
-    if (this.collision(0, 0)) {
-      this.currentPiece.shape = previousShape
-    }
-  }
-
-  private clearLines() {
-    let linesCleared = 0
-
-    for (let y = ROWS - 1; y >= 0; y--) {
-      if (this.board[y].every(cell => cell !== 0)) {
-        this.board.splice(y, 1)
-        this.board.unshift(Array(COLS).fill(0))
-        linesCleared++
-        y++ // 同じ行を再チェック
+          // 合計が7になったかチェック
+          if (sum === 7) {
+            // 全て7の場合、3つ以上かチェック
+            if (sequence.every(s => s.value === 7)) {
+              if (sequence.length >= 3) {
+                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
+              }
+            } else {
+              // 7以外が含まれる場合は通常通り消去
+              sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
+            }
+            break
+          } else if (sum > 7) {
+            // 7を超えたら終了
+            break
+          }
+        }
       }
     }
 
-    if (linesCleared > 0) {
-      this.score += linesCleared * 100
+    // 縦方向のチェック
+    for (let x = 0; x < COLS; x++) {
+      for (let y = 0; y < ROWS; y++) {
+        if (this.board[y][x] === 0) continue
+
+        // 下方向への連続をチェック
+        const sequence: { x: number; y: number; value: number }[] = []
+        let sum = 0
+        for (let dy = 0; y + dy < ROWS && this.board[y + dy][x] !== 0; dy++) {
+          const value = this.board[y + dy][x]
+          sequence.push({ x, y: y + dy, value })
+          sum += value
+
+          // 合計が7になったかチェック
+          if (sum === 7) {
+            // 全て7の場合、3つ以上かチェック
+            if (sequence.every(s => s.value === 7)) {
+              if (sequence.length >= 3) {
+                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
+              }
+            } else {
+              // 7以外が含まれる場合は通常通り消去
+              sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
+            }
+            break
+          } else if (sum > 7) {
+            // 7を超えたら終了
+            break
+          }
+        }
+      }
+    }
+
+    // ブロックを消去
+    if (toRemove.size > 0) {
+      toRemove.forEach(key => {
+        const [x, y] = key.split(',').map(Number)
+        this.board[y][x] = 0
+      })
+
+      // スコア加算
+      this.score += toRemove.size * 10
       this.scoreText.setText(`Score: ${this.score}`)
+
+      // 重力を適用
+      this.applyGravity()
+    }
+  }
+
+  private applyGravity() {
+    // 各列ごとに下から詰める
+    for (let x = 0; x < COLS; x++) {
+      const column: number[] = []
+      for (let y = ROWS - 1; y >= 0; y--) {
+        if (this.board[y][x] !== 0) {
+          column.push(this.board[y][x])
+        }
+      }
+
+      // 列を再構築
+      for (let y = 0; y < ROWS; y++) {
+        this.board[y][x] = 0
+      }
+      for (let i = 0; i < column.length; i++) {
+        this.board[ROWS - 1 - i][x] = column[i]
+      }
     }
   }
 
   private drawBackground() {
-    this.graphics.lineStyle(1, 0x444444, 1)
+    this.graphics.lineStyle(2, 0x444444, 1)
 
     // グリッド線を描画
     for (let x = 0; x <= COLS; x++) {
@@ -296,33 +305,45 @@ export class MainScene extends Phaser.Scene {
     // ボードを描画
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
-        if (this.board[y][x]) {
-          this.graphics.fillStyle(this.board[y][x], 1)
-          this.graphics.fillRect(
-            OFFSET_X + x * BLOCK_SIZE + 1,
-            OFFSET_Y + y * BLOCK_SIZE + 1,
-            BLOCK_SIZE - 2,
-            BLOCK_SIZE - 2
-          )
+        if (this.board[y][x] !== 0) {
+          const value = this.board[y][x]
+          this.drawBlock(x, y, value)
         }
       }
     }
 
-    // 現在のピースを描画
-    if (this.currentPiece) {
-      this.graphics.fillStyle(this.currentPiece.color, 1)
-      for (let y = 0; y < 4; y++) {
-        for (let x = 0; x < 4; x++) {
-          if (this.currentPiece.shape[y][x]) {
-            this.graphics.fillRect(
-              OFFSET_X + (this.currentPiece.x + x) * BLOCK_SIZE + 1,
-              OFFSET_Y + (this.currentPiece.y + y) * BLOCK_SIZE + 1,
-              BLOCK_SIZE - 2,
-              BLOCK_SIZE - 2
-            )
-          }
-        }
-      }
+    // 現在のブロックを描画
+    if (this.currentBlock) {
+      this.drawBlock(
+        this.currentBlock.x,
+        this.currentBlock.y,
+        this.currentBlock.value
+      )
     }
+  }
+
+  private drawBlock(x: number, y: number, value: number) {
+    // ブロックの背景を描画
+    this.graphics.fillStyle(COLORS[value], 1)
+    this.graphics.fillRect(
+      OFFSET_X + x * BLOCK_SIZE + 2,
+      OFFSET_Y + y * BLOCK_SIZE + 2,
+      BLOCK_SIZE - 4,
+      BLOCK_SIZE - 4
+    )
+
+    // 数字を描画
+    const text = this.add.text(
+      OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
+      OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2,
+      value.toString(),
+      {
+        fontSize: '32px',
+        color: '#ffffff',
+        fontStyle: 'bold',
+      }
+    )
+    text.setOrigin(0.5)
+    text.setStroke('#000000', 4)
   }
 }
