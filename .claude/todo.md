@@ -3,10 +3,10 @@
 ## 🔴 Critical（緊急・重要）
 
 ### メモリリーク修正
-- [ ] drawBlock()のTextオブジェクト生成を修正
-  - 現状: 毎フレーム新規作成してメモリリーク
-  - 対策: Textオブジェクトのプール管理または再利用
-  - ファイル: `src/game/MainScene.ts:325-348`
+- [x] drawBlock()のTextオブジェクト生成を修正 ✅ 完了
+  - 実装: Textオブジェクトのプール管理
+  - ファイル: `src/game/MainScene.ts`
+  - 完了日: 2025-11-17
 
 ## 🟡 High（重要）
 

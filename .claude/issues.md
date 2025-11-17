@@ -2,7 +2,7 @@
 
 ## 🔴 Critical Issues
 
-### Issue #1: メモリリーク - Textオブジェクトの無限生成
+### ✅ Issue #1: メモリリーク - Textオブジェクトの無限生成 【解決済み】
 
 **問題**
 - ファイル: `src/game/MainScene.ts:325-348`
@@ -10,59 +10,36 @@
 - 作成したTextオブジェクトを破棄していない
 - 長時間プレイでメモリ使用量が増加し続ける
 
+**実装した解決策**
+
+Textオブジェクトプールパターンを実装：
+
 ```typescript
-// 現在の問題コード（336-347行）
-private drawBlock(x: number, y: number, value: number) {
-  // ...
-  const text = this.add.text(...) // ← 毎フレーム作成！
-  text.setOrigin(0.5)
-  text.setStroke('#000000', 4)
-  // ← 破棄されない！
-}
-```
+// Textオブジェクトのプールを追加
+private textPool: Phaser.GameObjects.Text[]
+private textPoolIndex: number
 
-**解決策**
-
-#### オプション1: Textオブジェクトの再利用（推奨）
-```typescript
-private textObjects: Phaser.GameObjects.Text[][] = []
-
-// 初期化時に全てのTextオブジェクトを作成
-create() {
-  for (let y = 0; y < ROWS; y++) {
-    this.textObjects[y] = []
-    for (let x = 0; x < COLS; x++) {
-      const text = this.add.text(...)
-      text.setVisible(false)
-      this.textObjects[y][x] = text
-    }
-  }
+// create()で事前に必要数を作成
+const poolSize = ROWS * COLS + 1
+for (let i = 0; i < poolSize; i++) {
+  const text = this.add.text(0, 0, '', {...})
+  text.setVisible(false)
+  this.textPool.push(text)
 }
 
-// 描画時は表示/非表示を切り替えるだけ
-private drawBlock(x: number, y: number, value: number) {
-  const text = this.textObjects[y][x]
-  text.setText(value.toString())
-  text.setVisible(true)
-  text.setPosition(...)
-}
+// draw()でプールをリセット
+this.textPoolIndex = 0
+this.textPool.forEach(text => text.setVisible(false))
+
+// drawBlock()でプールから再利用
+const text = this.textPool[this.textPoolIndex++]
+text.setText(value.toString())
+text.setPosition(...)
+text.setVisible(true)
 ```
 
-#### オプション2: Graphics.text()を使用
-```typescript
-// Graphicsオブジェクトにテキストを直接描画
-// ただし、Phaserのバージョンによっては使えない可能性
-```
-
-#### オプション3: BitmapTextを使用
-```typescript
-// より軽量なBitmapTextを使用
-// フォント準備が必要
-```
-
-**優先度**: 🔴 Critical
-**影響**: パフォーマンス、メモリ使用量
-**推定作業時間**: 30分
+**解決日**: 2025-11-17
+**コミット**: Fix memory leak by implementing text object pooling
 
 ---
 
