@@ -45,75 +45,77 @@ text.setVisible(true)
 
 ## 🟡 High Priority Issues
 
-### Issue #2: 連鎖システム未実装
+### ✅ Issue #2: 連鎖システム未実装 【解決済み】
 
 **問題**
 - ブロック消去後、新たに合計7になる組み合わせができても自動消去されない
 - ユーザー体験的に重要な機能
 
-**解決策**
-```typescript
-private checkAndClearSevens() {
-  let cleared = false
-  do {
-    cleared = this.checkAndClearOnce()
-    if (cleared) {
-      this.chainCount++
-      this.applyGravity()
-      // アニメーション待ち時間を入れる
-      await this.delay(300)
-    }
-  } while (cleared)
+**実装した解決策**
 
-  if (this.chainCount > 1) {
-    // 連鎖ボーナス加算
-    this.score += this.chainCount * 50
+```typescript
+private checkAndClearSevensWithChain() {
+  const cleared = this.checkAndClearSevens()
+  if (cleared) {
+    this.chainCount++
+    // 連鎖表示と連鎖ボーナス
+    if (this.chainCount > 1) {
+      this.chainText.setText(`${this.chainCount} Chain!`)
+      const bonus = this.chainCount * 50
+      this.score += bonus
+    }
+    // 300ms待ってから再チェック
+    this.time.delayedCall(300, () => {
+      this.checkAndClearSevensWithChain()
+    })
   }
-  this.chainCount = 0
 }
 ```
 
-**優先度**: 🟡 High
-**影響**: ゲームプレイ
-**推定作業時間**: 1時間
+**解決日**: 2025-11-17
 
 ---
 
-### Issue #3: ネクストブロック表示なし
+### ✅ Issue #3: ネクストブロック表示なし 【解決済み】
 
 **問題**
 - 次に来るブロックが分からない
 - 戦略的なプレイが難しい
 
-**解決策**
-- `nextBlock`変数を追加
-- 画面右側にネクスト表示エリアを作成
-- ブロック生成時に次のブロックも決定
+**実装した解決策**
 
-**優先度**: 🟡 High
-**影響**: ゲームプレイ、UX
-**推定作業時間**: 45分
+- `nextBlock`変数を追加
+- 画面右側にネクスト表示エリアを作成（70×70px）
+- spawnBlock()でnextBlockを使用し、新しいnextBlockを生成
+- drawNextBlock()メソッドで描画
+
+**解決日**: 2025-11-17
 
 ---
 
 ## 🟢 Medium Priority Issues
 
-### Issue #4: ゲームオーバー後の操作不可
+### ✅ Issue #4: ゲームオーバー後の操作不可 【解決済み】
 
 **問題**
 - ゲームオーバー後、リロードしないと再プレイできない
 
-**解決策**
+**実装した解決策**
+
 ```typescript
-// Rキーでリスタート
-if (this.gameOver && Phaser.Input.Keyboard.JustDown(rKey)) {
+// Rキーを追加
+this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
+
+// update()でリスタート処理
+if (this.gameOver && Phaser.Input.Keyboard.JustDown(this.rKey)) {
   this.scene.restart()
 }
+
+// ゲームオーバーメッセージにリスタート案内を追加
+'GAME OVER\n\nPress R to Restart'
 ```
 
-**優先度**: 🟢 Medium
-**影響**: UX
-**推定作業時間**: 15分
+**解決日**: 2025-11-17
 
 ---
 

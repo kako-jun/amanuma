@@ -28,24 +28,30 @@ export class MainScene extends Phaser.Scene {
   } | null
   private graphics!: Phaser.GameObjects.Graphics
   private scoreText!: Phaser.GameObjects.Text
+  private chainText!: Phaser.GameObjects.Text
   private score: number
+  private chainCount: number
   private dropTimer: number
   private dropInterval: number
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+  private rKey!: Phaser.Input.Keyboard.Key
   private gameOver: boolean
   private textPool: Phaser.GameObjects.Text[] // Textオブジェクトのプール
   private textPoolIndex: number // 現在使用中のプールインデックス
+  private nextBlock: number // 次のブロック
 
   constructor() {
     super({ key: 'MainScene' })
     this.board = []
     this.currentBlock = null
     this.score = 0
+    this.chainCount = 0
     this.dropTimer = 0
     this.dropInterval = 1000
     this.gameOver = false
     this.textPool = []
     this.textPoolIndex = 0
+    this.nextBlock = 0
   }
 
   create() {
@@ -60,6 +66,18 @@ export class MainScene extends Phaser.Scene {
     // スコア表示
     this.scoreText = this.add.text(16, 16, 'Score: 0', {
       fontSize: '24px',
+      color: '#ffffff',
+    })
+
+    // 連鎖表示
+    this.chainText = this.add.text(16, 50, '', {
+      fontSize: '20px',
+      color: '#ffff00',
+    })
+
+    // ネクスト表示
+    this.add.text(320, 16, 'Next:', {
+      fontSize: '20px',
       color: '#ffffff',
     })
 
@@ -79,6 +97,12 @@ export class MainScene extends Phaser.Scene {
 
     // キーボード入力の設定
     this.cursors = this.input.keyboard!.createCursorKeys()
+    this.rKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.R
+    )
+
+    // 最初のネクストブロックを生成
+    this.nextBlock = Math.floor(Math.random() * 7) + 1
 
     // 最初のブロックを生成
     this.spawnBlock()
@@ -96,6 +120,12 @@ export class MainScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number) {
+    // リスタート処理
+    if (this.gameOver && Phaser.Input.Keyboard.JustDown(this.rKey)) {
+      this.scene.restart()
+      return
+    }
+
     if (this.gameOver) {
       return
     }
@@ -120,8 +150,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   private spawnBlock() {
-    // 1〜7のランダムな数字を生成
-    const value = Math.floor(Math.random() * 7) + 1
+    // ネクストブロックを使用
+    const value = this.nextBlock
+    // 次のネクストブロックを生成
+    this.nextBlock = Math.floor(Math.random() * 7) + 1
+
     this.currentBlock = {
       value: value,
       x: Math.floor(COLS / 2),
@@ -135,10 +168,11 @@ export class MainScene extends Phaser.Scene {
         .text(
           OFFSET_X + (COLS * BLOCK_SIZE) / 2,
           OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
-          'GAME OVER',
+          'GAME OVER\n\nPress R to Restart',
           {
-            fontSize: '48px',
+            fontSize: '32px',
             color: '#ff0000',
+            align: 'center',
           }
         )
         .setOrigin(0.5)
@@ -184,12 +218,43 @@ export class MainScene extends Phaser.Scene {
       this.currentBlock!.y++
     } else {
       this.merge()
-      this.checkAndClearSevens()
+      // 連鎖カウントをリセットして消去開始
+      this.chainCount = 0
+      this.checkAndClearSevensWithChain()
       this.spawnBlock()
     }
   }
 
-  private checkAndClearSevens() {
+  private checkAndClearSevensWithChain() {
+    const cleared = this.checkAndClearSevens()
+
+    if (cleared) {
+      this.chainCount++
+
+      // 連鎖表示
+      if (this.chainCount > 1) {
+        this.chainText.setText(`${this.chainCount} Chain!`)
+        // 3秒後に連鎖表示をクリア
+        this.time.delayedCall(3000, () => {
+          this.chainText.setText('')
+        })
+      }
+
+      // 連鎖ボーナス
+      if (this.chainCount > 1) {
+        const bonus = this.chainCount * 50
+        this.score += bonus
+        this.scoreText.setText(`Score: ${this.score}`)
+      }
+
+      // 少し待ってから再度チェック（連鎖）
+      this.time.delayedCall(300, () => {
+        this.checkAndClearSevensWithChain()
+      })
+    }
+  }
+
+  private checkAndClearSevens(): boolean {
     const toRemove: Set<string> = new Set()
 
     // 横方向のチェック
@@ -271,7 +336,11 @@ export class MainScene extends Phaser.Scene {
 
       // 重力を適用
       this.applyGravity()
+
+      return true // 消去したことを返す
     }
+
+    return false // 何も消去しなかった
   }
 
   private applyGravity() {
@@ -314,6 +383,10 @@ export class MainScene extends Phaser.Scene {
         OFFSET_Y + y * BLOCK_SIZE
       )
     }
+
+    // ネクストブロック表示エリアの枠
+    this.graphics.lineStyle(2, 0x666666, 1)
+    this.graphics.strokeRect(310, 40, 70, 70)
   }
 
   private draw() {
@@ -342,6 +415,9 @@ export class MainScene extends Phaser.Scene {
         this.currentBlock.value
       )
     }
+
+    // ネクストブロックを描画
+    this.drawNextBlock()
   }
 
   private drawBlock(x: number, y: number, value: number) {
@@ -362,6 +438,20 @@ export class MainScene extends Phaser.Scene {
         OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
         OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
       )
+      text.setVisible(true)
+    }
+  }
+
+  private drawNextBlock() {
+    // ネクストブロックの背景
+    this.graphics.fillStyle(COLORS[this.nextBlock], 1)
+    this.graphics.fillRect(320, 50, 50, 50)
+
+    // ネクストブロックの数字
+    if (this.textPoolIndex < this.textPool.length) {
+      const text = this.textPool[this.textPoolIndex++]
+      text.setText(this.nextBlock.toString())
+      text.setPosition(345, 75)
       text.setVisible(true)
     }
   }
