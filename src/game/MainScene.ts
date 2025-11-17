@@ -151,8 +151,8 @@ export class MainScene extends Phaser.Scene {
       Phaser.Input.Keyboard.KeyCodes.P
     )
 
-    // 最初のネクストブロックを生成
-    this.nextBlock = Math.floor(Math.random() * 7) + 1
+    // 最初のネクストブロックを生成（確率調整版）
+    this.nextBlock = this.generateRandomNumber()
 
     // 最初のブロックを生成
     this.spawnBlock()
@@ -176,10 +176,20 @@ export class MainScene extends Phaser.Scene {
       return
     }
 
-    // リスタート処理
-    if (this.gameOver && Phaser.Input.Keyboard.JustDown(this.rKey)) {
-      this.scene.restart()
-      return
+    // リスタート処理（Rキーでゲーム再開、ESCキーでタイトルに戻る）
+    if (this.gameOver) {
+      if (Phaser.Input.Keyboard.JustDown(this.rKey)) {
+        this.scene.restart()
+        return
+      }
+      // ESCキーでタイトルに戻る
+      const escKey = this.input.keyboard!.addKey(
+        Phaser.Input.Keyboard.KeyCodes.ESC
+      )
+      if (Phaser.Input.Keyboard.JustDown(escKey)) {
+        this.scene.start('TitleScene')
+        return
+      }
     }
 
     if (this.gameOver || this.paused) {
@@ -210,11 +220,22 @@ export class MainScene extends Phaser.Scene {
     this.pauseText.setVisible(this.paused)
   }
 
+  private generateRandomNumber(): number {
+    // 確率分布を調整（7を少なめに）
+    // 1-6: 各17%、7: 2%
+    const rand = Math.random()
+    if (rand < 0.02) {
+      return 7 // 2%
+    } else {
+      return Math.floor(rand * 6.12) + 1 // 1-6を均等に
+    }
+  }
+
   private spawnBlock() {
     // ネクストブロックを使用
     const value = this.nextBlock
-    // 次のネクストブロックを生成
-    this.nextBlock = Math.floor(Math.random() * 7) + 1
+    // 次のネクストブロックを生成（確率調整版）
+    this.nextBlock = this.generateRandomNumber()
 
     this.currentBlock = {
       value: value,
@@ -249,9 +270,9 @@ export class MainScene extends Phaser.Scene {
         .text(
           OFFSET_X + (COLS * BLOCK_SIZE) / 2,
           OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
-          'GAME OVER\n\nPress R to Restart',
+          'GAME OVER\n\nR: Restart  ESC: Title',
           {
-            fontSize: '32px',
+            fontSize: '28px',
             color: '#ff0000',
             align: 'center',
           }
