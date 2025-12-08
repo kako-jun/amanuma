@@ -385,17 +385,19 @@ export class MainScene extends Phaser.Scene {
           sequence.push({ x: x + dx, y, value })
           sum += value
 
-          // 合計が7になったかチェック
-          if (sum === 7) {
-            // 全て7の場合、3つ以上かチェック
-            if (sequence.every(s => s.value === 7)) {
-              if (sequence.length >= 3) {
-                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              }
-            } else {
-              // 7以外が含まれる場合は通常通り消去
+          // 全て7の場合は特別ルール：3つ以上で消える
+          if (sequence.every(s => s.value === 7)) {
+            if (sequence.length >= 3) {
               sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             }
+            // 7の連続は続けてチェック（breakしない）
+            continue
+          }
+
+          // 合計が7になったかチェック
+          if (sum === 7) {
+            // 7以外が含まれる場合は通常通り消去
+            sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             break
           } else if (sum > 7) {
             // 7を超えたら終了
@@ -418,17 +420,19 @@ export class MainScene extends Phaser.Scene {
           sequence.push({ x, y: y + dy, value })
           sum += value
 
-          // 合計が7になったかチェック
-          if (sum === 7) {
-            // 全て7の場合、3つ以上かチェック
-            if (sequence.every(s => s.value === 7)) {
-              if (sequence.length >= 3) {
-                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              }
-            } else {
-              // 7以外が含まれる場合は通常通り消去
+          // 全て7の場合は特別ルール：3つ以上で消える
+          if (sequence.every(s => s.value === 7)) {
+            if (sequence.length >= 3) {
               sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             }
+            // 7の連続は続けてチェック（breakしない）
+            continue
+          }
+
+          // 合計が7になったかチェック
+          if (sum === 7) {
+            // 7以外が含まれる場合は通常通り消去
+            sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             break
           } else if (sum > 7) {
             // 7を超えたら終了

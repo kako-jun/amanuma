@@ -241,6 +241,46 @@ export class VersusScene extends Phaser.Scene {
     this.pauseText.setVisible(this.paused)
   }
 
+  // タッチ入力用の公開メソッド（Player 1）
+  public p1TouchLeft() {
+    if (!this.paused && this.winner === 0) {
+      this.player1.move(-1)
+    }
+  }
+
+  public p1TouchRight() {
+    if (!this.paused && this.winner === 0) {
+      this.player1.move(1)
+    }
+  }
+
+  public p1TouchDown() {
+    if (!this.paused && this.winner === 0) {
+      this.handleDrop(this.player1, this.player2, 1)
+      this.player1.dropTimer = 0
+    }
+  }
+
+  // タッチ入力用の公開メソッド（Player 2）
+  public p2TouchLeft() {
+    if (!this.paused && this.winner === 0) {
+      this.player2.move(-1)
+    }
+  }
+
+  public p2TouchRight() {
+    if (!this.paused && this.winner === 0) {
+      this.player2.move(1)
+    }
+  }
+
+  public p2TouchDown() {
+    if (!this.paused && this.winner === 0) {
+      this.handleDrop(this.player2, this.player1, 2)
+      this.player2.dropTimer = 0
+    }
+  }
+
   /**
    * ブロック落下処理と攻撃システム
    */
