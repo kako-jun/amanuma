@@ -79,7 +79,7 @@ const PhaserGame = () => {
   const handleLeftStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { title, main } = getActiveScene()
       if (title) {
         title.selectUp()
@@ -106,7 +106,7 @@ const PhaserGame = () => {
   const handleRightStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { title, main } = getActiveScene()
       if (title) {
         title.selectDown()
@@ -133,7 +133,7 @@ const PhaserGame = () => {
   const handleDownStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { title, main } = getActiveScene()
       if (title) {
         title.confirmSelection()
@@ -160,7 +160,7 @@ const PhaserGame = () => {
   const handleP1LeftStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { versus } = getActiveScene()
       if (versus) {
         versus.p1TouchLeft()
@@ -185,7 +185,7 @@ const PhaserGame = () => {
   const handleP1RightStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { versus } = getActiveScene()
       if (versus) {
         versus.p1TouchRight()
@@ -210,7 +210,7 @@ const PhaserGame = () => {
   const handleP1DownStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { versus } = getActiveScene()
       if (versus) {
         versus.p1TouchDown()
@@ -235,7 +235,7 @@ const PhaserGame = () => {
   const handleP2LeftStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { versus } = getActiveScene()
       if (versus) {
         versus.p2TouchLeft()
@@ -260,7 +260,7 @@ const PhaserGame = () => {
   const handleP2RightStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { versus } = getActiveScene()
       if (versus) {
         versus.p2TouchRight()
@@ -285,7 +285,7 @@ const PhaserGame = () => {
   const handleP2DownStart = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      if (e.type === 'click' && 'ontouchstart' in window) return
+      if (e.type === 'mousedown' && 'ontouchstart' in window) return
       const { versus } = getActiveScene()
       if (versus) {
         versus.p2TouchDown()
