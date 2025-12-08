@@ -46,6 +46,8 @@ export class MainScene extends Phaser.Scene {
   private textPoolIndex: number // 現在使用中のプールインデックス
   private nextBlock: number // 次のブロック
   private blockEffects!: BlockEffects // 演出管理
+  private lastMoveTime: number // 最後の移動時間（デバウンス用）
+  private moveDebounceMs: number // デバウンス時間
 
   constructor() {
     super({ key: 'MainScene' })
@@ -64,6 +66,8 @@ export class MainScene extends Phaser.Scene {
     this.textPool = []
     this.textPoolIndex = 0
     this.nextBlock = 0
+    this.lastMoveTime = 0
+    this.moveDebounceMs = 150 // 150msのデバウンス
   }
 
   create() {
@@ -155,14 +159,6 @@ export class MainScene extends Phaser.Scene {
     // 最初のブロックを生成
     this.spawnBlock()
 
-    // ゲームループの開始
-    this.time.addEvent({
-      delay: this.dropInterval,
-      callback: this.drop,
-      callbackScope: this,
-      loop: true,
-    })
-
     // 演出管理クラスの初期化
     this.blockEffects = new BlockEffects(this, SINGLE_OFFSET_X, SINGLE_OFFSET_Y)
 
@@ -199,15 +195,29 @@ export class MainScene extends Phaser.Scene {
 
     this.dropTimer += delta
 
-    // キーボード入力の処理
+    // キーボード入力の処理（デバウンス付き）
+    const now = this.time.now
     if (Phaser.Input.Keyboard.JustDown(this.cursors.left!)) {
-      this.move(-1)
+      if (now - this.lastMoveTime >= this.moveDebounceMs) {
+        this.move(-1)
+        this.lastMoveTime = now
+      }
     }
     if (Phaser.Input.Keyboard.JustDown(this.cursors.right!)) {
-      this.move(1)
+      if (now - this.lastMoveTime >= this.moveDebounceMs) {
+        this.move(1)
+        this.lastMoveTime = now
+      }
     }
     if (this.cursors.down?.isDown) {
+      // 下キー押下時は高速落下
       if (this.dropTimer > 100) {
+        this.drop()
+        this.dropTimer = 0
+      }
+    } else {
+      // 通常の自動落下（dropIntervalに基づく）
+      if (this.dropTimer >= this.dropInterval) {
         this.drop()
         this.dropTimer = 0
       }

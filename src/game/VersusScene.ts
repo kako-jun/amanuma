@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { GameBoard } from './GameBoard'
-import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS } from './constants'
+import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS, SEVEN_PROBABILITY, LINES_PER_LEVEL, MIN_DROP_INTERVAL, BASE_DROP_INTERVAL, SCORE_PER_BLOCK } from './constants'
 import { BlockEffects } from './BlockEffects'
 
 /**
@@ -43,12 +43,28 @@ export class VersusScene extends Phaser.Scene {
   private pauseText!: Phaser.GameObjects.Text
   private winner: number // 0=進行中, 1=P1勝利, 2=P2勝利
 
+  // デバウンス用
+  private p1LastMoveTime: number
+  private p2LastMoveTime: number
+  private moveDebounceMs: number
+
+  // 共有ブロックキュー
+  private sharedBlockQueue: number[]
+  private p1BlockIndex: number // P1が次に使うブロックのインデックス
+  private p2BlockIndex: number // P2が次に使うブロックのインデックス
+
   constructor() {
     super({ key: 'VersusScene' })
     this.textPool = []
     this.textPoolIndex = 0
     this.paused = false
     this.winner = 0
+    this.p1LastMoveTime = 0
+    this.p2LastMoveTime = 0
+    this.moveDebounceMs = 150
+    this.sharedBlockQueue = []
+    this.p1BlockIndex = 0
+    this.p2BlockIndex = 0
   }
 
   create() {
@@ -163,12 +179,65 @@ export class VersusScene extends Phaser.Scene {
     this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
     this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
 
-    // Spawn initial blocks
-    this.player1.spawnBlock()
-    this.player2.spawnBlock()
+    // 共有ブロックキューを初期化
+    this.sharedBlockQueue = []
+    for (let i = 0; i < 100; i++) {
+      this.sharedBlockQueue.push(this.generateSharedBlock())
+    }
+
+    // 両プレイヤーに同じブロックを設定
+    const firstBlock = this.sharedBlockQueue[0]
+    const secondBlock = this.sharedBlockQueue[1]
+    this.p1BlockIndex = 2
+    this.p2BlockIndex = 2
+
+    // P1のブロックを設定
+    this.player1.nextBlock = secondBlock
+    this.player1.currentBlock = {
+      value: firstBlock,
+      x: Math.floor(COLS / 2),
+      y: 0,
+    }
+
+    // P2のブロックを設定（同じブロック）
+    this.player2.nextBlock = secondBlock
+    this.player2.currentBlock = {
+      value: firstBlock,
+      x: Math.floor(COLS / 2),
+      y: 0,
+    }
 
     // Draw background
     this.drawBackground()
+  }
+
+  /** 共有ブロック生成（確率調整） */
+  private generateSharedBlock(): number {
+    const rand = Math.random()
+    if (rand < SEVEN_PROBABILITY) {
+      return 7
+    }
+    return Math.floor(rand * 6.12) + 1
+  }
+
+  /** 共有キューから次のブロックを取得 */
+  private getNextSharedBlock(playerNum: number): number {
+    const index = playerNum === 1 ? this.p1BlockIndex : this.p2BlockIndex
+
+    // キューが足りなくなったら追加
+    while (index >= this.sharedBlockQueue.length) {
+      for (let i = 0; i < 50; i++) {
+        this.sharedBlockQueue.push(this.generateSharedBlock())
+      }
+    }
+
+    const block = this.sharedBlockQueue[index]
+    if (playerNum === 1) {
+      this.p1BlockIndex++
+    } else {
+      this.p2BlockIndex++
+    }
+    return block
   }
 
   update(_time: number, delta: number) {
@@ -198,12 +267,19 @@ export class VersusScene extends Phaser.Scene {
     this.player1.dropTimer += delta
     this.player2.dropTimer += delta
 
-    // Player 1 controls (WASD)
+    // Player 1 controls (WASD) - デバウンス付き
+    const now = this.time.now
     if (Phaser.Input.Keyboard.JustDown(this.wasd.a)) {
-      this.player1.move(-1)
+      if (now - this.p1LastMoveTime >= this.moveDebounceMs) {
+        this.player1.move(-1)
+        this.p1LastMoveTime = now
+      }
     }
     if (Phaser.Input.Keyboard.JustDown(this.wasd.d)) {
-      this.player1.move(1)
+      if (now - this.p1LastMoveTime >= this.moveDebounceMs) {
+        this.player1.move(1)
+        this.p1LastMoveTime = now
+      }
     }
     if (this.wasd.s.isDown) {
       if (this.player1.dropTimer > 100) {
@@ -215,12 +291,18 @@ export class VersusScene extends Phaser.Scene {
       this.player1.dropTimer = 0
     }
 
-    // Player 2 controls (Arrow keys)
+    // Player 2 controls (Arrow keys) - デバウンス付き
     if (Phaser.Input.Keyboard.JustDown(this.cursors.left!)) {
-      this.player2.move(-1)
+      if (now - this.p2LastMoveTime >= this.moveDebounceMs) {
+        this.player2.move(-1)
+        this.p2LastMoveTime = now
+      }
     }
     if (Phaser.Input.Keyboard.JustDown(this.cursors.right!)) {
-      this.player2.move(1)
+      if (now - this.p2LastMoveTime >= this.moveDebounceMs) {
+        this.player2.move(1)
+        this.p2LastMoveTime = now
+      }
     }
     if (this.cursors.down?.isDown) {
       if (this.player2.dropTimer > 100) {
@@ -299,13 +381,36 @@ export class VersusScene extends Phaser.Scene {
       // Check and clear with chain
       this.checkAndClearWithChain(player, opponent, playerNum)
 
-      // Spawn new block
-      const isGameOver = player.spawnBlock()
+      // Spawn new block using shared queue
+      const isGameOver = this.spawnSharedBlock(player, playerNum)
 
       if (isGameOver) {
         this.handleGameOver(playerNum === 1 ? 2 : 1)
       }
     }
+  }
+
+  /**
+   * 共有キューからブロックを生成
+   */
+  private spawnSharedBlock(player: GameBoard, playerNum: number): boolean {
+    const value = player.nextBlock
+    // 共有キューから次のブロックを取得
+    player.nextBlock = this.getNextSharedBlock(playerNum)
+
+    player.currentBlock = {
+      value: value,
+      x: Math.floor(COLS / 2),
+      y: 0,
+    }
+
+    // ゲームオーバー判定
+    if (player.board[0][player.currentBlock.x] !== 0) {
+      player.gameOver = true
+      return true
+    }
+
+    return false
   }
 
   /**
@@ -344,14 +449,17 @@ export class VersusScene extends Phaser.Scene {
         })
 
         // スコア加算
-        player.score += result.toRemove.size * 10
+        player.score += result.toRemove.size * SCORE_PER_BLOCK
         player.linesCleared++
 
         // レベルアップ処理
-        const newLevel = Math.floor(player.linesCleared / 10) + 1
+        const newLevel = Math.floor(player.linesCleared / LINES_PER_LEVEL) + 1
         if (newLevel > player.level) {
           player.level = newLevel
-          player.dropInterval = Math.max(1000 / (1 + (player.level - 1) * 0.1), 100)
+          player.dropInterval = Math.max(
+            BASE_DROP_INTERVAL / (1 + (player.level - 1) * 0.1),
+            MIN_DROP_INTERVAL
+          )
         }
 
         // Attack: send garbage blocks to opponent

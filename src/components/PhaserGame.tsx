@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import Phaser from 'phaser'
 import { gameConfig } from '../game/config'
 import { MainScene } from '../game/MainScene'
@@ -22,13 +22,24 @@ const PhaserGame = () => {
   const p2LeftIntervalRef = useRef<number | null>(null)
   const p2RightIntervalRef = useRef<number | null>(null)
   const p2DropIntervalRef = useRef<number | null>(null)
+  // 現在のシーン状態
+  const [isVersusMode, setIsVersusMode] = useState(false)
 
   useEffect(() => {
     if (!gameRef.current) {
       gameRef.current = new Phaser.Game(gameConfig)
     }
 
+    // シーン状態を定期的にチェック
+    const checkScene = setInterval(() => {
+      if (gameRef.current) {
+        const versusScene = gameRef.current.scene.getScene('VersusScene')
+        setIsVersusMode(versusScene?.scene.isActive() ?? false)
+      }
+    }, 200)
+
     return () => {
+      clearInterval(checkScene)
       if (gameRef.current) {
         gameRef.current.destroy(true)
         gameRef.current = null
@@ -296,8 +307,8 @@ const PhaserGame = () => {
   }, [])
 
   return (
-    <div className="phaser-game-container">
-      {/* 対戦モード: P1コントロール（左側） */}
+    <div className={`phaser-game-container ${isVersusMode ? 'versus-active' : ''}`}>
+      {/* 対戦モード: P1コントロール（左側・横画面用） */}
       <div className="versus-controls p1-controls">
         <div className="player-label">P1</div>
         <div className="touch-row">
@@ -388,6 +399,68 @@ const PhaserGame = () => {
             onMouseUp={handleRightEnd}
             onMouseLeave={handleRightEnd}
           >→</button>
+        </div>
+      </div>
+
+      {/* 縦画面対戦モード: 下部に両プレイヤーのボタン */}
+      <div className="versus-portrait-controls">
+        <div className="versus-controls p1-portrait">
+          <div className="player-label">P1</div>
+          <div className="touch-row">
+            <button
+              className="touch-btn"
+              onTouchStart={handleP1LeftStart}
+              onTouchEnd={handleP1LeftEnd}
+              onMouseDown={handleP1LeftStart}
+              onMouseUp={handleP1LeftEnd}
+              onMouseLeave={handleP1LeftEnd}
+            >←</button>
+            <button
+              className="touch-btn drop"
+              onTouchStart={handleP1DownStart}
+              onTouchEnd={handleP1DownEnd}
+              onMouseDown={handleP1DownStart}
+              onMouseUp={handleP1DownEnd}
+              onMouseLeave={handleP1DownEnd}
+            >↓</button>
+            <button
+              className="touch-btn"
+              onTouchStart={handleP1RightStart}
+              onTouchEnd={handleP1RightEnd}
+              onMouseDown={handleP1RightStart}
+              onMouseUp={handleP1RightEnd}
+              onMouseLeave={handleP1RightEnd}
+            >→</button>
+          </div>
+        </div>
+        <div className="versus-controls p2-portrait">
+          <div className="player-label">P2</div>
+          <div className="touch-row">
+            <button
+              className="touch-btn"
+              onTouchStart={handleP2LeftStart}
+              onTouchEnd={handleP2LeftEnd}
+              onMouseDown={handleP2LeftStart}
+              onMouseUp={handleP2LeftEnd}
+              onMouseLeave={handleP2LeftEnd}
+            >←</button>
+            <button
+              className="touch-btn drop"
+              onTouchStart={handleP2DownStart}
+              onTouchEnd={handleP2DownEnd}
+              onMouseDown={handleP2DownStart}
+              onMouseUp={handleP2DownEnd}
+              onMouseLeave={handleP2DownEnd}
+            >↓</button>
+            <button
+              className="touch-btn"
+              onTouchStart={handleP2RightStart}
+              onTouchEnd={handleP2RightEnd}
+              onMouseDown={handleP2RightStart}
+              onMouseUp={handleP2RightEnd}
+              onMouseLeave={handleP2RightEnd}
+            >→</button>
+          </div>
         </div>
       </div>
     </div>
