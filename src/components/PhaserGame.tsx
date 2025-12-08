@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react'
 import Phaser from 'phaser'
 import { gameConfig } from '../game/config'
+import { MainScene } from '../game/MainScene'
 import './PhaserGame.css'
 
 const PhaserGame = () => {
@@ -19,20 +20,41 @@ const PhaserGame = () => {
     }
   }, [])
 
-  const emitKey = useCallback((keyCode: number) => {
-    if (!gameRef.current) return
-    const scene = gameRef.current.scene.getScenes(true)[0]
-    if (scene && scene.input.keyboard) {
-      scene.input.keyboard.emit('keydown', { keyCode })
-      setTimeout(() => {
-        scene.input.keyboard?.emit('keyup', { keyCode })
-      }, 100)
+  const getMainScene = useCallback((): MainScene | null => {
+    if (!gameRef.current) return null
+    const scene = gameRef.current.scene.getScene('MainScene')
+    if (scene && scene.scene.isActive()) {
+      return scene as MainScene
     }
+    return null
   }, [])
 
-  const handleLeft = useCallback(() => emitKey(37), [emitKey])
-  const handleRight = useCallback(() => emitKey(39), [emitKey])
-  const handleDown = useCallback(() => emitKey(40), [emitKey])
+  const handleLeft = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      e.preventDefault()
+      const scene = getMainScene()
+      scene?.touchLeft()
+    },
+    [getMainScene]
+  )
+
+  const handleRight = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      e.preventDefault()
+      const scene = getMainScene()
+      scene?.touchRight()
+    },
+    [getMainScene]
+  )
+
+  const handleDown = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      e.preventDefault()
+      const scene = getMainScene()
+      scene?.touchDown()
+    },
+    [getMainScene]
+  )
 
   return (
     <div className="phaser-game-container">
@@ -42,21 +64,21 @@ const PhaserGame = () => {
           <button
             className="touch-btn"
             onTouchStart={handleLeft}
-            onMouseDown={handleLeft}
+            onClick={handleLeft}
           >
             ←
           </button>
           <button
             className="touch-btn drop"
             onTouchStart={handleDown}
-            onMouseDown={handleDown}
+            onClick={handleDown}
           >
             ↓
           </button>
           <button
             className="touch-btn"
             onTouchStart={handleRight}
-            onMouseDown={handleRight}
+            onClick={handleRight}
           >
             →
           </button>
