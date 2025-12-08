@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react'
 import Phaser from 'phaser'
 import { gameConfig } from '../game/config'
 import { MainScene } from '../game/MainScene'
+import { TitleScene } from '../game/TitleScene'
 import './PhaserGame.css'
 
 const PhaserGame = () => {
@@ -20,40 +21,59 @@ const PhaserGame = () => {
     }
   }, [])
 
-  const getMainScene = useCallback((): MainScene | null => {
-    if (!gameRef.current) return null
-    const scene = gameRef.current.scene.getScene('MainScene')
-    if (scene && scene.scene.isActive()) {
-      return scene as MainScene
+  const getActiveScene = useCallback(() => {
+    if (!gameRef.current) return { title: null, main: null }
+    const titleScene = gameRef.current.scene.getScene('TitleScene')
+    const mainScene = gameRef.current.scene.getScene('MainScene')
+    return {
+      title:
+        titleScene && titleScene.scene.isActive()
+          ? (titleScene as TitleScene)
+          : null,
+      main:
+        mainScene && mainScene.scene.isActive()
+          ? (mainScene as MainScene)
+          : null,
     }
-    return null
   }, [])
 
   const handleLeft = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      const scene = getMainScene()
-      scene?.touchLeft()
+      const { title, main } = getActiveScene()
+      if (title) {
+        title.selectUp() // タイトル: 上のモード選択
+      } else if (main) {
+        main.touchLeft()
+      }
     },
-    [getMainScene]
+    [getActiveScene]
   )
 
   const handleRight = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      const scene = getMainScene()
-      scene?.touchRight()
+      const { title, main } = getActiveScene()
+      if (title) {
+        title.selectDown() // タイトル: 下のモード選択
+      } else if (main) {
+        main.touchRight()
+      }
     },
-    [getMainScene]
+    [getActiveScene]
   )
 
   const handleDown = useCallback(
     (e: React.TouchEvent | React.MouseEvent) => {
       e.preventDefault()
-      const scene = getMainScene()
-      scene?.touchDown()
+      const { title, main } = getActiveScene()
+      if (title) {
+        title.confirmSelection() // タイトル: 決定
+      } else if (main) {
+        main.touchDown()
+      }
     },
-    [getMainScene]
+    [getActiveScene]
   )
 
   return (
