@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
-import { GameBoard, COLS, ROWS, BLOCK_SIZE, COLORS } from './GameBoard'
+import { GameBoard } from './GameBoard'
+import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS } from './constants'
 
 /**
  * 2人対戦モードのシーン
@@ -49,10 +50,10 @@ export class VersusScene extends Phaser.Scene {
 
   create() {
     // Player 1 のボード（左側）
-    this.player1 = new GameBoard(this, 50, 80)
+    this.player1 = new GameBoard(50, 80)
 
     // Player 2 のボード（右側）
-    this.player2 = new GameBoard(this, 450, 80)
+    this.player2 = new GameBoard(450, 80)
 
     // Graphics
     this.graphics = this.add.graphics()
@@ -284,7 +285,7 @@ export class VersusScene extends Phaser.Scene {
         })
 
         // Chain bonus
-        const bonus = player.chainCount * 50
+        const bonus = player.chainCount * CHAIN_BONUS
         player.score += bonus
       }
 
