@@ -14,6 +14,7 @@ import {
   SEVEN_PROBABILITY,
   STORAGE_KEY_HIGHSCORE,
 } from './constants'
+import { BlockEffects } from './BlockEffects'
 
 export class MainScene extends Phaser.Scene {
   private board: number[][] // 0=空, 1-7=数字ブロック
@@ -44,6 +45,7 @@ export class MainScene extends Phaser.Scene {
   private textPool: Phaser.GameObjects.Text[] // Textオブジェクトのプール
   private textPoolIndex: number // 現在使用中のプールインデックス
   private nextBlock: number // 次のブロック
+  private blockEffects!: BlockEffects // 演出管理
 
   constructor() {
     super({ key: 'MainScene' })
@@ -160,6 +162,9 @@ export class MainScene extends Phaser.Scene {
       callbackScope: this,
       loop: true,
     })
+
+    // 演出管理クラスの初期化
+    this.blockEffects = new BlockEffects(this, SINGLE_OFFSET_X, SINGLE_OFFSET_Y)
 
     // 背景を描画
     this.drawBackground()
@@ -341,15 +346,14 @@ export class MainScene extends Phaser.Scene {
   }
 
   private checkAndClearSevensWithChain() {
-    const cleared = this.checkAndClearSevens()
+    const result = this.blockEffects.findBlocksToRemove(this.board)
 
-    if (cleared) {
+    if (result.toRemove.size > 0) {
       this.chainCount++
 
       // 連鎖表示
       if (this.chainCount > 1) {
         this.chainText.setText(`${this.chainCount} Chain!`)
-        // 3秒後に連鎖表示をクリア
         this.time.delayedCall(3000, () => {
           this.chainText.setText('')
         })
@@ -362,133 +366,40 @@ export class MainScene extends Phaser.Scene {
         this.scoreText.setText(`Score: ${this.score}`)
       }
 
-      // 少し待ってから再度チェック（連鎖）
-      this.time.delayedCall(300, () => {
-        this.checkAndClearSevensWithChain()
+      // 演出を再生してから消去
+      this.blockEffects.playRemoveAnimation(this.board, result.toRemove, result.hasTripleSeven, this.chainCount > 1, () => {
+        // 実際に消去
+        result.toRemove.forEach(key => {
+          const [x, y] = key.split(',').map(Number)
+          this.board[y][x] = 0
+        })
+
+        // スコア加算
+        this.score += result.toRemove.size * SCORE_PER_BLOCK
+        this.scoreText.setText(`Score: ${this.score}`)
+
+        // ライン消去数をカウント
+        this.linesCleared++
+
+        // レベルアップ
+        const newLevel = Math.floor(this.linesCleared / LINES_PER_LEVEL) + 1
+        if (newLevel > this.level) {
+          this.level = newLevel
+          this.levelText.setText(`Level: ${this.level}`)
+          this.dropInterval = Math.max(
+            this.baseDropInterval / (1 + (this.level - 1) * 0.1),
+            MIN_DROP_INTERVAL
+          )
+        }
+
+        // 重力を適用（アニメーション付き）
+        this.blockEffects.applyGravityWithAnimation(this.board, () => {
+          // 連鎖チェック
+          this.time.delayedCall(50, () => {
+            this.checkAndClearSevensWithChain()
+          })
+        })
       })
-    }
-  }
-
-  private checkAndClearSevens(): boolean {
-    const toRemove: Set<string> = new Set()
-
-    // 横方向のチェック
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        if (this.board[y][x] === 0) continue
-
-        // 右方向への連続をチェック
-        const sequence: { x: number; y: number; value: number }[] = []
-        let sum = 0
-        for (let dx = 0; x + dx < COLS && this.board[y][x + dx] !== 0; dx++) {
-          const value = this.board[y][x + dx]
-          sequence.push({ x: x + dx, y, value })
-          sum += value
-
-          // 合計が7になったかチェック
-          if (sum === 7) {
-            // 全て7の場合、3つ以上かチェック
-            if (sequence.every(s => s.value === 7)) {
-              if (sequence.length >= 3) {
-                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              }
-            } else {
-              // 7以外が含まれる場合は通常通り消去
-              sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-            }
-            break
-          } else if (sum > 7) {
-            // 7を超えたら終了
-            break
-          }
-        }
-      }
-    }
-
-    // 縦方向のチェック
-    for (let x = 0; x < COLS; x++) {
-      for (let y = 0; y < ROWS; y++) {
-        if (this.board[y][x] === 0) continue
-
-        // 下方向への連続をチェック
-        const sequence: { x: number; y: number; value: number }[] = []
-        let sum = 0
-        for (let dy = 0; y + dy < ROWS && this.board[y + dy][x] !== 0; dy++) {
-          const value = this.board[y + dy][x]
-          sequence.push({ x, y: y + dy, value })
-          sum += value
-
-          // 合計が7になったかチェック
-          if (sum === 7) {
-            // 全て7の場合、3つ以上かチェック
-            if (sequence.every(s => s.value === 7)) {
-              if (sequence.length >= 3) {
-                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              }
-            } else {
-              // 7以外が含まれる場合は通常通り消去
-              sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-            }
-            break
-          } else if (sum > 7) {
-            // 7を超えたら終了
-            break
-          }
-        }
-      }
-    }
-
-    // ブロックを消去
-    if (toRemove.size > 0) {
-      toRemove.forEach(key => {
-        const [x, y] = key.split(',').map(Number)
-        this.board[y][x] = 0
-      })
-
-      // スコア加算
-      this.score += toRemove.size * SCORE_PER_BLOCK
-      this.scoreText.setText(`Score: ${this.score}`)
-
-      // ライン消去数をカウント
-      this.linesCleared++
-
-      // レベルアップ
-      const newLevel = Math.floor(this.linesCleared / LINES_PER_LEVEL) + 1
-      if (newLevel > this.level) {
-        this.level = newLevel
-        this.levelText.setText(`Level: ${this.level}`)
-        this.dropInterval = Math.max(
-          this.baseDropInterval / (1 + (this.level - 1) * 0.1),
-          MIN_DROP_INTERVAL
-        )
-      }
-
-      // 重力を適用
-      this.applyGravity()
-
-      return true // 消去したことを返す
-    }
-
-    return false // 何も消去しなかった
-  }
-
-  private applyGravity() {
-    // 各列ごとに下から詰める
-    for (let x = 0; x < COLS; x++) {
-      const column: number[] = []
-      for (let y = ROWS - 1; y >= 0; y--) {
-        if (this.board[y][x] !== 0) {
-          column.push(this.board[y][x])
-        }
-      }
-
-      // 列を再構築
-      for (let y = 0; y < ROWS; y++) {
-        this.board[y][x] = 0
-      }
-      for (let i = 0; i < column.length; i++) {
-        this.board[ROWS - 1 - i][x] = column[i]
-      }
     }
   }
 
@@ -524,17 +435,33 @@ export class MainScene extends Phaser.Scene {
 
     // Textプールをリセット（全て非表示にする）
     this.textPoolIndex = 0
-    this.textPool.forEach(text => text.setVisible(false))
+    this.textPool.forEach(text => {
+      text.setVisible(false)
+      text.setScale(1)
+      text.setAlpha(1)
+    })
 
-    // ボードを描画
+    // 演出中・落下中のブロックのキーを取得
+    const excludedKeys = this.blockEffects.getExcludedKeys()
+
+    // ボードを描画（演出中・落下中のブロックは除く）
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
-        if (this.board[y][x] !== 0) {
+        if (this.board[y][x] !== 0 && !excludedKeys.has(`${x},${y}`)) {
           const value = this.board[y][x]
           this.drawBlock(x, y, value)
         }
       }
     }
+
+    // 演出中のブロックを描画
+    const textPoolIndex = { value: this.textPoolIndex }
+    this.blockEffects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.textPoolIndex = textPoolIndex.value
+
+    // 落下中のブロックを描画
+    this.blockEffects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.textPoolIndex = textPoolIndex.value
 
     // 現在のブロックを描画
     if (this.currentBlock) {
@@ -550,23 +477,33 @@ export class MainScene extends Phaser.Scene {
   }
 
   private drawBlock(x: number, y: number, value: number) {
+    this.drawBlockWithScale(x, y, value, 1, 1)
+  }
+
+  private drawBlockWithScale(x: number, y: number, value: number, scale: number, alpha: number) {
+    if (scale <= 0 || alpha <= 0) return
+
+    const centerX = SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2
+    const centerY = SINGLE_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
+    const size = (BLOCK_SIZE - 4) * scale
+    const halfSize = size / 2
+
     // ブロックの背景を描画
-    this.graphics.fillStyle(COLORS[value], 1)
+    this.graphics.fillStyle(COLORS[value], alpha)
     this.graphics.fillRect(
-      SINGLE_OFFSET_X + x * BLOCK_SIZE + 2,
-      SINGLE_OFFSET_Y + y * BLOCK_SIZE + 2,
-      BLOCK_SIZE - 4,
-      BLOCK_SIZE - 4
+      centerX - halfSize,
+      centerY - halfSize,
+      size,
+      size
     )
 
     // プールからTextオブジェクトを取得して再利用
-    if (this.textPoolIndex < this.textPool.length) {
+    if (this.textPoolIndex < this.textPool.length && scale > 0.3) {
       const text = this.textPool[this.textPoolIndex++]
       text.setText(value.toString())
-      text.setPosition(
-        SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
-        SINGLE_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
-      )
+      text.setPosition(centerX, centerY)
+      text.setScale(scale)
+      text.setAlpha(alpha)
       text.setVisible(true)
     }
   }

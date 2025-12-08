@@ -158,15 +158,17 @@ export class GameBoard {
           sequence.push({ x: x + dx, y, value })
           sum += value
 
-          if (sum === 7) {
-            // 全て7の場合、3つ以上かチェック
-            if (sequence.every(s => s.value === 7)) {
-              if (sequence.length >= 3) {
-                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              }
-            } else {
+          // 全て7の場合は特別ルール：3つ以上で消える
+          if (sequence.every(s => s.value === 7)) {
+            if (sequence.length >= 3) {
               sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             }
+            // 7の連続は続けてチェック（breakしない）
+            continue
+          }
+
+          if (sum === 7) {
+            sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             break
           } else if (sum > 7) {
             break
@@ -187,14 +189,17 @@ export class GameBoard {
           sequence.push({ x, y: y + dy, value })
           sum += value
 
-          if (sum === 7) {
-            if (sequence.every(s => s.value === 7)) {
-              if (sequence.length >= 3) {
-                sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              }
-            } else {
+          // 全て7の場合は特別ルール：3つ以上で消える
+          if (sequence.every(s => s.value === 7)) {
+            if (sequence.length >= 3) {
               sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             }
+            // 7の連続は続けてチェック（breakしない）
+            continue
+          }
+
+          if (sum === 7) {
+            sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
             break
           } else if (sum > 7) {
             break
