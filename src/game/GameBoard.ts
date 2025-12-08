@@ -1,21 +1,12 @@
-import Phaser from 'phaser'
-
-// ゲームの定数
-export const COLS = 5
-export const ROWS = 10
-export const BLOCK_SIZE = 50
-
-// 数字ごとの色定義
-export const COLORS = [
-  0x808080, // 0 (使用しない)
-  0xff0000, // 1 赤
-  0xff7f00, // 2 オレンジ
-  0xffff00, // 3 黄色
-  0x00ff00, // 4 緑
-  0x0000ff, // 5 青
-  0x4b0082, // 6 藍色
-  0x9400d3, // 7 紫
-]
+import {
+  COLS,
+  ROWS,
+  BASE_DROP_INTERVAL,
+  MIN_DROP_INTERVAL,
+  LINES_PER_LEVEL,
+  SCORE_PER_BLOCK,
+  SEVEN_PROBABILITY,
+} from './constants'
 
 /**
  * 1人分のゲームボードを管理するクラス
@@ -41,7 +32,7 @@ export class GameBoard {
 
   private baseDropInterval: number
 
-  constructor(_scene: Phaser.Scene, offsetX: number, offsetY: number) {
+  constructor(offsetX: number, offsetY: number) {
     this.offsetX = offsetX
     this.offsetY = offsetY
     this.board = Array(ROWS)
@@ -54,22 +45,18 @@ export class GameBoard {
     this.linesCleared = 0
     this.chainCount = 0
     this.dropTimer = 0
-    this.baseDropInterval = 1000
-    this.dropInterval = 1000
+    this.baseDropInterval = BASE_DROP_INTERVAL
+    this.dropInterval = BASE_DROP_INTERVAL
     this.gameOver = false
   }
 
-  /**
-   * 確率調整した乱数生成
-   * 1-6: 各17%、7: 2%
-   */
+  /** 確率調整した乱数生成（7は希少） */
   private generateRandomNumber(): number {
     const rand = Math.random()
-    if (rand < 0.02) {
-      return 7 // 2%
-    } else {
-      return Math.floor(rand * 6.12) + 1 // 1-6を均等に
+    if (rand < SEVEN_PROBABILITY) {
+      return 7
     }
+    return Math.floor(rand * 6.12) + 1
   }
 
   /**
@@ -224,16 +211,16 @@ export class GameBoard {
       })
 
       // スコア加算
-      this.score += toRemove.size * 10
+      this.score += toRemove.size * SCORE_PER_BLOCK
       this.linesCleared++
 
       // レベルアップ処理
-      const newLevel = Math.floor(this.linesCleared / 10) + 1
+      const newLevel = Math.floor(this.linesCleared / LINES_PER_LEVEL) + 1
       if (newLevel > this.level) {
         this.level = newLevel
         this.dropInterval = Math.max(
           this.baseDropInterval / (1 + (this.level - 1) * 0.1),
-          this.baseDropInterval / 2
+          MIN_DROP_INTERVAL
         )
       }
 
