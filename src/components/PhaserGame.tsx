@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from 'react'
 import Phaser from 'phaser'
 import { gameConfig } from '../game/config'
+import { MainScene } from '../game/MainScene'
+import { TitleScene } from '../game/TitleScene'
 import './PhaserGame.css'
 
 const PhaserGame = () => {
@@ -19,20 +21,60 @@ const PhaserGame = () => {
     }
   }, [])
 
-  const emitKey = useCallback((keyCode: number) => {
-    if (!gameRef.current) return
-    const scene = gameRef.current.scene.getScenes(true)[0]
-    if (scene && scene.input.keyboard) {
-      scene.input.keyboard.emit('keydown', { keyCode })
-      setTimeout(() => {
-        scene.input.keyboard?.emit('keyup', { keyCode })
-      }, 100)
+  const getActiveScene = useCallback(() => {
+    if (!gameRef.current) return { title: null, main: null }
+    const titleScene = gameRef.current.scene.getScene('TitleScene')
+    const mainScene = gameRef.current.scene.getScene('MainScene')
+    return {
+      title:
+        titleScene && titleScene.scene.isActive()
+          ? (titleScene as TitleScene)
+          : null,
+      main:
+        mainScene && mainScene.scene.isActive()
+          ? (mainScene as MainScene)
+          : null,
     }
   }, [])
 
-  const handleLeft = useCallback(() => emitKey(37), [emitKey])
-  const handleRight = useCallback(() => emitKey(39), [emitKey])
-  const handleDown = useCallback(() => emitKey(40), [emitKey])
+  const handleLeft = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      e.preventDefault()
+      const { title, main } = getActiveScene()
+      if (title) {
+        title.selectUp() // タイトル: 上のモード選択
+      } else if (main) {
+        main.touchLeft()
+      }
+    },
+    [getActiveScene]
+  )
+
+  const handleRight = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      e.preventDefault()
+      const { title, main } = getActiveScene()
+      if (title) {
+        title.selectDown() // タイトル: 下のモード選択
+      } else if (main) {
+        main.touchRight()
+      }
+    },
+    [getActiveScene]
+  )
+
+  const handleDown = useCallback(
+    (e: React.TouchEvent | React.MouseEvent) => {
+      e.preventDefault()
+      const { title, main } = getActiveScene()
+      if (title) {
+        title.confirmSelection() // タイトル: 決定
+      } else if (main) {
+        main.touchDown()
+      }
+    },
+    [getActiveScene]
+  )
 
   return (
     <div className="phaser-game-container">
@@ -42,21 +84,21 @@ const PhaserGame = () => {
           <button
             className="touch-btn"
             onTouchStart={handleLeft}
-            onMouseDown={handleLeft}
+            onClick={handleLeft}
           >
             ←
           </button>
           <button
             className="touch-btn drop"
             onTouchStart={handleDown}
-            onMouseDown={handleDown}
+            onClick={handleDown}
           >
             ↓
           </button>
           <button
             className="touch-btn"
             onTouchStart={handleRight}
-            onMouseDown={handleRight}
+            onClick={handleRight}
           >
             →
           </button>

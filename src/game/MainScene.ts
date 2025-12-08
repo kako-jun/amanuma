@@ -216,6 +216,26 @@ export class MainScene extends Phaser.Scene {
     this.pauseText.setVisible(this.paused)
   }
 
+  // タッチ入力用の公開メソッド
+  public touchLeft() {
+    if (!this.gameOver && !this.paused) {
+      this.move(-1)
+    }
+  }
+
+  public touchRight() {
+    if (!this.gameOver && !this.paused) {
+      this.move(1)
+    }
+  }
+
+  public touchDown() {
+    if (!this.gameOver && !this.paused) {
+      this.drop()
+      this.dropTimer = 0
+    }
+  }
+
   private generateRandomNumber(): number {
     const rand = Math.random()
     if (rand < SEVEN_PROBABILITY) {
