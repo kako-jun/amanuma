@@ -1,23 +1,19 @@
 import Phaser from 'phaser'
-
-// ゲームの定数
-const COLS = 5
-const ROWS = 10
-const BLOCK_SIZE = 50
-const OFFSET_X = 250 // 800px幅の中央に配置（200px右シフト）
-const OFFSET_Y = 50
-
-// 数字ごとの色定義
-const COLORS = [
-  0x808080, // 0 (使用しない)
-  0xff0000, // 1 赤
-  0xff7f00, // 2 オレンジ
-  0xffff00, // 3 黄色
-  0x00ff00, // 4 緑
-  0x0000ff, // 5 青
-  0x4b0082, // 6 藍色
-  0x9400d3, // 7 紫
-]
+import {
+  COLS,
+  ROWS,
+  BLOCK_SIZE,
+  SINGLE_OFFSET_X,
+  SINGLE_OFFSET_Y,
+  COLORS,
+  BASE_DROP_INTERVAL,
+  MIN_DROP_INTERVAL,
+  LINES_PER_LEVEL,
+  SCORE_PER_BLOCK,
+  CHAIN_BONUS,
+  SEVEN_PROBABILITY,
+  STORAGE_KEY_HIGHSCORE,
+} from './constants'
 
 export class MainScene extends Phaser.Scene {
   private board: number[][] // 0=空, 1-7=数字ブロック
@@ -59,8 +55,8 @@ export class MainScene extends Phaser.Scene {
     this.linesCleared = 0
     this.chainCount = 0
     this.dropTimer = 0
-    this.baseDropInterval = 1000
-    this.dropInterval = 1000
+    this.baseDropInterval = BASE_DROP_INTERVAL
+    this.dropInterval = BASE_DROP_INTERVAL
     this.gameOver = false
     this.paused = false
     this.textPool = []
@@ -75,7 +71,7 @@ export class MainScene extends Phaser.Scene {
       .map(() => Array(COLS).fill(0))
 
     // ハイスコアを読み込み
-    const savedHighScore = localStorage.getItem('threeseven-highscore')
+    const savedHighScore = localStorage.getItem(STORAGE_KEY_HIGHSCORE)
     this.highScore = savedHighScore ? parseInt(savedHighScore, 10) : 0
 
     // グラフィックスの作成
@@ -108,8 +104,8 @@ export class MainScene extends Phaser.Scene {
     // 一時停止表示（非表示で作成）
     this.pauseText = this.add
       .text(
-        OFFSET_X + (COLS * BLOCK_SIZE) / 2,
-        OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
+        SINGLE_OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+        SINGLE_OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
         'PAUSED\n\nPress P to Resume',
         {
           fontSize: '32px',
@@ -221,14 +217,11 @@ export class MainScene extends Phaser.Scene {
   }
 
   private generateRandomNumber(): number {
-    // 確率分布を調整（7を少なめに）
-    // 1-6: 各17%、7: 2%
     const rand = Math.random()
-    if (rand < 0.02) {
-      return 7 // 2%
-    } else {
-      return Math.floor(rand * 6.12) + 1 // 1-6を均等に
+    if (rand < SEVEN_PROBABILITY) {
+      return 7
     }
+    return Math.floor(rand * 6.12) + 1
   }
 
   private spawnBlock() {
@@ -250,12 +243,12 @@ export class MainScene extends Phaser.Scene {
       // ハイスコア更新
       if (this.score > this.highScore) {
         this.highScore = this.score
-        localStorage.setItem('threeseven-highscore', this.highScore.toString())
+        localStorage.setItem(STORAGE_KEY_HIGHSCORE, this.highScore.toString())
         this.highScoreText.setText(`High: ${this.highScore}`)
         this.add
           .text(
-            OFFSET_X + (COLS * BLOCK_SIZE) / 2,
-            OFFSET_Y + (ROWS * BLOCK_SIZE) / 2 - 80,
+            SINGLE_OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+            SINGLE_OFFSET_Y + (ROWS * BLOCK_SIZE) / 2 - 80,
             'NEW HIGH SCORE!',
             {
               fontSize: '24px',
@@ -268,8 +261,8 @@ export class MainScene extends Phaser.Scene {
 
       this.add
         .text(
-          OFFSET_X + (COLS * BLOCK_SIZE) / 2,
-          OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
+          SINGLE_OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+          SINGLE_OFFSET_Y + (ROWS * BLOCK_SIZE) / 2,
           'GAME OVER\n\nR: Restart  ESC: Title',
           {
             fontSize: '28px',
@@ -344,7 +337,7 @@ export class MainScene extends Phaser.Scene {
 
       // 連鎖ボーナス
       if (this.chainCount > 1) {
-        const bonus = this.chainCount * 50
+        const bonus = this.chainCount * CHAIN_BONUS
         this.score += bonus
         this.scoreText.setText(`Score: ${this.score}`)
       }
@@ -433,21 +426,20 @@ export class MainScene extends Phaser.Scene {
       })
 
       // スコア加算
-      this.score += toRemove.size * 10
+      this.score += toRemove.size * SCORE_PER_BLOCK
       this.scoreText.setText(`Score: ${this.score}`)
 
       // ライン消去数をカウント
       this.linesCleared++
 
-      // 10ライン消去ごとにレベルアップ
-      const newLevel = Math.floor(this.linesCleared / 10) + 1
+      // レベルアップ
+      const newLevel = Math.floor(this.linesCleared / LINES_PER_LEVEL) + 1
       if (newLevel > this.level) {
         this.level = newLevel
         this.levelText.setText(`Level: ${this.level}`)
-        // レベルに応じて速度を上げる（最大2倍速）
         this.dropInterval = Math.max(
           this.baseDropInterval / (1 + (this.level - 1) * 0.1),
-          this.baseDropInterval / 2
+          MIN_DROP_INTERVAL
         )
       }
 
@@ -486,22 +478,22 @@ export class MainScene extends Phaser.Scene {
     // グリッド線を描画
     for (let x = 0; x <= COLS; x++) {
       this.graphics.lineBetween(
-        OFFSET_X + x * BLOCK_SIZE,
-        OFFSET_Y,
-        OFFSET_X + x * BLOCK_SIZE,
-        OFFSET_Y + ROWS * BLOCK_SIZE
+        SINGLE_OFFSET_X + x * BLOCK_SIZE,
+        SINGLE_OFFSET_Y,
+        SINGLE_OFFSET_X + x * BLOCK_SIZE,
+        SINGLE_OFFSET_Y + ROWS * BLOCK_SIZE
       )
     }
     for (let y = 0; y <= ROWS; y++) {
       this.graphics.lineBetween(
-        OFFSET_X,
-        OFFSET_Y + y * BLOCK_SIZE,
-        OFFSET_X + COLS * BLOCK_SIZE,
-        OFFSET_Y + y * BLOCK_SIZE
+        SINGLE_OFFSET_X,
+        SINGLE_OFFSET_Y + y * BLOCK_SIZE,
+        SINGLE_OFFSET_X + COLS * BLOCK_SIZE,
+        SINGLE_OFFSET_Y + y * BLOCK_SIZE
       )
     }
 
-    // ネクストブロック表示エリアの枠（中央配置用に調整）
+    // ネクストブロック表示エリアの枠
     this.graphics.lineStyle(2, 0x666666, 1)
     this.graphics.strokeRect(510, 40, 70, 70)
   }
@@ -541,8 +533,8 @@ export class MainScene extends Phaser.Scene {
     // ブロックの背景を描画
     this.graphics.fillStyle(COLORS[value], 1)
     this.graphics.fillRect(
-      OFFSET_X + x * BLOCK_SIZE + 2,
-      OFFSET_Y + y * BLOCK_SIZE + 2,
+      SINGLE_OFFSET_X + x * BLOCK_SIZE + 2,
+      SINGLE_OFFSET_Y + y * BLOCK_SIZE + 2,
       BLOCK_SIZE - 4,
       BLOCK_SIZE - 4
     )
@@ -552,8 +544,8 @@ export class MainScene extends Phaser.Scene {
       const text = this.textPool[this.textPoolIndex++]
       text.setText(value.toString())
       text.setPosition(
-        OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
-        OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
+        SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2,
+        SINGLE_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
       )
       text.setVisible(true)
     }
