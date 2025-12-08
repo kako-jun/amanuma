@@ -14,6 +14,7 @@ import {
   SEVEN_PROBABILITY,
   STORAGE_KEY_HIGHSCORE,
 } from './constants'
+import { BlockEffects } from './BlockEffects'
 
 export class MainScene extends Phaser.Scene {
   private board: number[][] // 0=空, 1-7=数字ブロック
@@ -44,8 +45,7 @@ export class MainScene extends Phaser.Scene {
   private textPool: Phaser.GameObjects.Text[] // Textオブジェクトのプール
   private textPoolIndex: number // 現在使用中のプールインデックス
   private nextBlock: number // 次のブロック
-  private animatingBlocks: { x: number; y: number; value: number; scale: number; alpha: number }[] // 演出中のブロック
-  private fallingBlocks: { x: number; fromY: number; toY: number; currentY: number; value: number }[] // 落下中のブロック
+  private blockEffects!: BlockEffects // 演出管理
 
   constructor() {
     super({ key: 'MainScene' })
@@ -64,8 +64,6 @@ export class MainScene extends Phaser.Scene {
     this.textPool = []
     this.textPoolIndex = 0
     this.nextBlock = 0
-    this.animatingBlocks = []
-    this.fallingBlocks = []
   }
 
   create() {
@@ -164,6 +162,9 @@ export class MainScene extends Phaser.Scene {
       callbackScope: this,
       loop: true,
     })
+
+    // 演出管理クラスの初期化
+    this.blockEffects = new BlockEffects(this, SINGLE_OFFSET_X, SINGLE_OFFSET_Y)
 
     // 背景を描画
     this.drawBackground()
@@ -345,7 +346,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private checkAndClearSevensWithChain() {
-    const result = this.findBlocksToRemove()
+    const result = this.blockEffects.findBlocksToRemove(this.board)
 
     if (result.toRemove.size > 0) {
       this.chainCount++
@@ -366,7 +367,7 @@ export class MainScene extends Phaser.Scene {
       }
 
       // 演出を再生してから消去
-      this.playRemoveAnimation(result.toRemove, result.hasTripleSeven, this.chainCount > 1, () => {
+      this.blockEffects.playRemoveAnimation(this.board, result.toRemove, result.hasTripleSeven, this.chainCount > 1, () => {
         // 実際に消去
         result.toRemove.forEach(key => {
           const [x, y] = key.split(',').map(Number)
@@ -392,7 +393,7 @@ export class MainScene extends Phaser.Scene {
         }
 
         // 重力を適用（アニメーション付き）
-        this.applyGravityWithAnimation(() => {
+        this.blockEffects.applyGravityWithAnimation(this.board, () => {
           // 連鎖チェック
           this.time.delayedCall(50, () => {
             this.checkAndClearSevensWithChain()
@@ -400,262 +401,6 @@ export class MainScene extends Phaser.Scene {
         })
       })
     }
-  }
-
-  private findBlocksToRemove(): { toRemove: Set<string>; hasTripleSeven: boolean } {
-    const toRemove: Set<string> = new Set()
-    let hasTripleSeven = false
-
-    // 横方向のチェック
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        if (this.board[y][x] === 0) continue
-
-        const sequence: { x: number; y: number; value: number }[] = []
-        let sum = 0
-        for (let dx = 0; x + dx < COLS && this.board[y][x + dx] !== 0; dx++) {
-          const value = this.board[y][x + dx]
-          sequence.push({ x: x + dx, y, value })
-          sum += value
-
-          if (sequence.every(s => s.value === 7)) {
-            if (sequence.length >= 3) {
-              sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              hasTripleSeven = true
-            }
-            continue
-          }
-
-          if (sum === 7) {
-            sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-            break
-          } else if (sum > 7) {
-            break
-          }
-        }
-      }
-    }
-
-    // 縦方向のチェック
-    for (let x = 0; x < COLS; x++) {
-      for (let y = 0; y < ROWS; y++) {
-        if (this.board[y][x] === 0) continue
-
-        const sequence: { x: number; y: number; value: number }[] = []
-        let sum = 0
-        for (let dy = 0; y + dy < ROWS && this.board[y + dy][x] !== 0; dy++) {
-          const value = this.board[y + dy][x]
-          sequence.push({ x, y: y + dy, value })
-          sum += value
-
-          if (sequence.every(s => s.value === 7)) {
-            if (sequence.length >= 3) {
-              sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-              hasTripleSeven = true
-            }
-            continue
-          }
-
-          if (sum === 7) {
-            sequence.forEach(s => toRemove.add(`${s.x},${s.y}`))
-            break
-          } else if (sum > 7) {
-            break
-          }
-        }
-      }
-    }
-
-    return { toRemove, hasTripleSeven }
-  }
-
-  private playRemoveAnimation(
-    toRemove: Set<string>,
-    hasTripleSeven: boolean,
-    isChain: boolean,
-    onComplete: () => void
-  ) {
-    this.animatingBlocks = []
-
-    // 消去対象のブロック情報を保存
-    toRemove.forEach(key => {
-      const [x, y] = key.split(',').map(Number)
-      const value = this.board[y][x]
-      this.animatingBlocks.push({ x, y, value, scale: 1, alpha: 1 })
-    })
-
-    const animDuration = hasTripleSeven ? 400 : 300
-
-    // 点滅アニメーション（3回点滅）
-    let blinkCount = 0
-    const blinkInterval = setInterval(() => {
-      blinkCount++
-      this.animatingBlocks.forEach(block => {
-        block.alpha = block.alpha === 1 ? 0.3 : 1
-      })
-      if (blinkCount >= 6) {
-        clearInterval(blinkInterval)
-      }
-    }, 50)
-
-    // 縮小アニメーション
-    this.tweens.addCounter({
-      from: 1,
-      to: 0,
-      duration: animDuration,
-      delay: 150,
-      ease: 'Power2',
-      onUpdate: (tween) => {
-        const scale = tween.getValue() ?? 1
-        this.animatingBlocks.forEach(block => {
-          block.scale = scale
-          block.alpha = scale
-        })
-      },
-      onComplete: () => {
-        // 爆発エフェクト（7×3の場合）
-        if (hasTripleSeven) {
-          this.playExplosionEffect(toRemove)
-        }
-
-        // 連鎖時はパーティクル追加
-        if (isChain) {
-          this.playChainParticles(toRemove)
-        }
-
-        this.animatingBlocks = []
-        onComplete()
-      }
-    })
-  }
-
-  private playExplosionEffect(toRemove: Set<string>) {
-    toRemove.forEach(key => {
-      const [x, y] = key.split(',').map(Number)
-      const centerX = SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2
-      const centerY = SINGLE_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
-
-      // 爆発リング（scaleでサイズを変化）
-      const ring = this.add.circle(centerX, centerY, BLOCK_SIZE / 2, 0x9400d3, 0.8)
-      ring.setScale(0.2)
-      this.tweens.add({
-        targets: ring,
-        scale: 2,
-        alpha: 0,
-        duration: 300,
-        ease: 'Power2',
-        onComplete: () => ring.destroy()
-      })
-
-      // 放射状のパーティクル
-      for (let i = 0; i < 8; i++) {
-        const angle = (i / 8) * Math.PI * 2
-        const particle = this.add.circle(centerX, centerY, 4, 0xffffff, 1)
-        this.tweens.add({
-          targets: particle,
-          x: centerX + Math.cos(angle) * BLOCK_SIZE,
-          y: centerY + Math.sin(angle) * BLOCK_SIZE,
-          alpha: 0,
-          scale: 0.5,
-          duration: 250,
-          ease: 'Power2',
-          onComplete: () => particle.destroy()
-        })
-      }
-    })
-  }
-
-  private playChainParticles(toRemove: Set<string>) {
-    toRemove.forEach(key => {
-      const [x, y] = key.split(',').map(Number)
-      const centerX = SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2
-      const centerY = SINGLE_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
-
-      // 上昇するキラキラパーティクル
-      for (let i = 0; i < 3; i++) {
-        const offsetX = (Math.random() - 0.5) * BLOCK_SIZE
-        const particle = this.add.star(
-          centerX + offsetX,
-          centerY,
-          5,
-          3,
-          6,
-          0xffff00,
-          1
-        )
-        particle.setScale(0.5)
-        this.tweens.add({
-          targets: particle,
-          y: centerY - BLOCK_SIZE * 1.5,
-          alpha: 0,
-          rotation: Math.PI,
-          duration: 400 + Math.random() * 200,
-          delay: i * 50,
-          ease: 'Power1',
-          onComplete: () => particle.destroy()
-        })
-      }
-    })
-  }
-
-  private applyGravityWithAnimation(onComplete: () => void) {
-    this.fallingBlocks = []
-
-    // 各列ごとに落下情報を計算
-    for (let x = 0; x < COLS; x++) {
-      // 下から上にスキャンして、空きマスと落下するブロックを特定
-      let writeY = ROWS - 1 // 書き込み位置
-
-      for (let readY = ROWS - 1; readY >= 0; readY--) {
-        if (this.board[readY][x] !== 0) {
-          if (readY !== writeY) {
-            // 落下アニメーション対象
-            this.fallingBlocks.push({
-              x,
-              fromY: readY,
-              toY: writeY,
-              currentY: readY,
-              value: this.board[readY][x]
-            })
-          }
-          writeY--
-        }
-      }
-    }
-
-    // 落下するブロックがない場合は即座に完了
-    if (this.fallingBlocks.length === 0) {
-      onComplete()
-      return
-    }
-
-    // ボードから落下するブロックを一時的に削除
-    this.fallingBlocks.forEach(block => {
-      this.board[block.fromY][block.x] = 0
-    })
-
-    // 落下アニメーション
-    const fallDuration = 150
-    this.tweens.addCounter({
-      from: 0,
-      to: 1,
-      duration: fallDuration,
-      ease: 'Bounce.easeOut',
-      onUpdate: (tween) => {
-        const progress = tween.getValue() ?? 0
-        this.fallingBlocks.forEach(block => {
-          block.currentY = block.fromY + (block.toY - block.fromY) * progress
-        })
-      },
-      onComplete: () => {
-        // ボードに反映
-        this.fallingBlocks.forEach(block => {
-          this.board[block.toY][block.x] = block.value
-        })
-        this.fallingBlocks = []
-        onComplete()
-      }
-    })
   }
 
   private drawBackground() {
@@ -696,20 +441,13 @@ export class MainScene extends Phaser.Scene {
       text.setAlpha(1)
     })
 
-    // 演出中のブロックのキーを作成
-    const animatingKeys = new Set(
-      this.animatingBlocks.map(b => `${b.x},${b.y}`)
-    )
-
-    // 落下中のブロックのキーを作成
-    const fallingKeys = new Set(
-      this.fallingBlocks.map(b => `${b.x},${b.fromY}`)
-    )
+    // 演出中・落下中のブロックのキーを取得
+    const excludedKeys = this.blockEffects.getExcludedKeys()
 
     // ボードを描画（演出中・落下中のブロックは除く）
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
-        if (this.board[y][x] !== 0 && !animatingKeys.has(`${x},${y}`) && !fallingKeys.has(`${x},${y}`)) {
+        if (this.board[y][x] !== 0 && !excludedKeys.has(`${x},${y}`)) {
           const value = this.board[y][x]
           this.drawBlock(x, y, value)
         }
@@ -717,14 +455,13 @@ export class MainScene extends Phaser.Scene {
     }
 
     // 演出中のブロックを描画
-    this.animatingBlocks.forEach(block => {
-      this.drawBlockWithScale(block.x, block.y, block.value, block.scale, block.alpha)
-    })
+    const textPoolIndex = { value: this.textPoolIndex }
+    this.blockEffects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.textPoolIndex = textPoolIndex.value
 
     // 落下中のブロックを描画
-    this.fallingBlocks.forEach(block => {
-      this.drawBlockAtY(block.x, block.currentY, block.value)
-    })
+    this.blockEffects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.textPoolIndex = textPoolIndex.value
 
     // 現在のブロックを描画
     if (this.currentBlock) {
@@ -741,27 +478,6 @@ export class MainScene extends Phaser.Scene {
 
   private drawBlock(x: number, y: number, value: number) {
     this.drawBlockWithScale(x, y, value, 1, 1)
-  }
-
-  private drawBlockAtY(x: number, y: number, value: number) {
-    const centerX = SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2
-    const centerY = SINGLE_OFFSET_Y + y * BLOCK_SIZE + BLOCK_SIZE / 2
-    const halfSize = (BLOCK_SIZE - 4) / 2
-
-    this.graphics.fillStyle(COLORS[value], 1)
-    this.graphics.fillRect(
-      centerX - halfSize,
-      centerY - halfSize,
-      BLOCK_SIZE - 4,
-      BLOCK_SIZE - 4
-    )
-
-    if (this.textPoolIndex < this.textPool.length) {
-      const text = this.textPool[this.textPoolIndex++]
-      text.setText(value.toString())
-      text.setPosition(centerX, centerY)
-      text.setVisible(true)
-    }
   }
 
   private drawBlockWithScale(x: number, y: number, value: number, scale: number, alpha: number) {

@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { GameBoard } from './GameBoard'
 import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS } from './constants'
+import { BlockEffects } from './BlockEffects'
 
 /**
  * 2人対戦モードのシーン
@@ -9,6 +10,8 @@ import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS } from './constants'
 export class VersusScene extends Phaser.Scene {
   private player1!: GameBoard
   private player2!: GameBoard
+  private p1Effects!: BlockEffects
+  private p2Effects!: BlockEffects
   private graphics!: Phaser.GameObjects.Graphics
 
   // Player 1 UI
@@ -51,9 +54,11 @@ export class VersusScene extends Phaser.Scene {
   create() {
     // Player 1 のボード（左側）
     this.player1 = new GameBoard(50, 80)
+    this.p1Effects = new BlockEffects(this, 50, 80)
 
     // Player 2 のボード（右側）
     this.player2 = new GameBoard(450, 80)
+    this.p2Effects = new BlockEffects(this, 450, 80)
 
     // Graphics
     this.graphics = this.add.graphics()
@@ -304,16 +309,17 @@ export class VersusScene extends Phaser.Scene {
   }
 
   /**
-   * 連鎖チェックと攻撃処理
+   * 連鎖チェックと攻撃処理（アニメーション付き）
    */
   private checkAndClearWithChain(
     player: GameBoard,
     opponent: GameBoard,
     playerNum: number
   ) {
-    const cleared = player.checkAndClearSevens()
+    const effects = playerNum === 1 ? this.p1Effects : this.p2Effects
+    const result = effects.findBlocksToRemove(player.board)
 
-    if (cleared > 0) {
+    if (result.toRemove.size > 0) {
       player.chainCount++
 
       // Update chain text
@@ -329,15 +335,38 @@ export class VersusScene extends Phaser.Scene {
         player.score += bonus
       }
 
-      // Attack: send garbage blocks to opponent
-      if (player.chainCount > 0) {
-        const garbageCount = Math.max(1, Math.floor(cleared / 3))
-        opponent.addGarbageBlocks(garbageCount)
-      }
+      // 演出を再生してから消去
+      effects.playRemoveAnimation(player.board, result.toRemove, result.hasTripleSeven, player.chainCount > 1, () => {
+        // 実際に消去
+        result.toRemove.forEach(key => {
+          const [x, y] = key.split(',').map(Number)
+          player.board[y][x] = 0
+        })
 
-      // Continue chain check
-      this.time.delayedCall(300, () => {
-        this.checkAndClearWithChain(player, opponent, playerNum)
+        // スコア加算
+        player.score += result.toRemove.size * 10
+        player.linesCleared++
+
+        // レベルアップ処理
+        const newLevel = Math.floor(player.linesCleared / 10) + 1
+        if (newLevel > player.level) {
+          player.level = newLevel
+          player.dropInterval = Math.max(1000 / (1 + (player.level - 1) * 0.1), 100)
+        }
+
+        // Attack: send garbage blocks to opponent
+        if (player.chainCount > 0) {
+          const garbageCount = Math.max(1, Math.floor(result.toRemove.size / 3))
+          opponent.addGarbageBlocks(garbageCount)
+        }
+
+        // 重力を適用（アニメーション付き）
+        effects.applyGravityWithAnimation(player.board, () => {
+          // Continue chain check
+          this.time.delayedCall(50, () => {
+            this.checkAndClearWithChain(player, opponent, playerNum)
+          })
+        })
       })
     }
   }
@@ -432,10 +461,18 @@ export class VersusScene extends Phaser.Scene {
 
     // Reset text pool
     this.textPoolIndex = 0
-    this.textPool.forEach(text => text.setVisible(false))
+    this.textPool.forEach(text => {
+      text.setVisible(false)
+      text.setScale(1)
+      text.setAlpha(1)
+    })
+
+    const textPoolIndex = { value: this.textPoolIndex }
 
     // Draw Player 1
-    this.drawBoard(this.player1)
+    this.drawBoard(this.player1, this.p1Effects)
+    this.p1Effects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.p1Effects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
     if (this.player1.currentBlock) {
       this.drawBlock(
         this.player1.offsetX,
@@ -448,7 +485,9 @@ export class VersusScene extends Phaser.Scene {
     this.drawNextBlock(this.player1.nextBlock, 340, 60)
 
     // Draw Player 2
-    this.drawBoard(this.player2)
+    this.drawBoard(this.player2, this.p2Effects)
+    this.p2Effects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.p2Effects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
     if (this.player2.currentBlock) {
       this.drawBlock(
         this.player2.offsetX,
@@ -459,12 +498,15 @@ export class VersusScene extends Phaser.Scene {
       )
     }
     this.drawNextBlock(this.player2.nextBlock, 740, 60)
+
+    this.textPoolIndex = textPoolIndex.value
   }
 
-  private drawBoard(board: GameBoard) {
+  private drawBoard(board: GameBoard, effects: BlockEffects) {
+    const excludedKeys = effects.getExcludedKeys()
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
-        if (board.board[y][x] !== 0) {
+        if (board.board[y][x] !== 0 && !excludedKeys.has(`${x},${y}`)) {
           this.drawBlock(
             board.offsetX,
             board.offsetY,
