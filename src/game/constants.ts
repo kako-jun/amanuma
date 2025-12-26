@@ -20,17 +20,45 @@ export const VS_P1_OFFSET_X = 50
 export const VS_P2_OFFSET_X = 450
 export const VS_OFFSET_Y = 130
 
-// 数字ごとの色定義（虹色）
+// 数字ごとの色定義（洗練されたネオン風パレット）
 export const COLORS: readonly number[] = [
-  0x808080, // 0 (使用しない)
-  0xff0000, // 1 赤
-  0xff7f00, // 2 オレンジ
-  0xffff00, // 3 黄色
-  0x00ff00, // 4 緑
-  0x0000ff, // 5 青
-  0x4b0082, // 6 藍色
-  0x9400d3, // 7 紫
+  0x2a2a3e, // 0 (使用しない - 背景色)
+  0xff6b9d, // 1 ローズピンク
+  0xffa06b, // 2 コーラルオレンジ
+  0xffd93d, // 3 ゴールデンイエロー
+  0x6bffb8, // 4 ミントグリーン
+  0x6bb3ff, // 5 スカイブルー
+  0xa06bff, // 6 パープル
+  0xff6bff, // 7 マゼンタ（特別）
 ] as const
+
+// UI カラー定義
+export const UI_COLORS = {
+  // 背景
+  background: 0x0f0f1a,
+  backgroundLight: 0x1a1a2e,
+  backgroundCard: 0x16213e,
+
+  // アクセント
+  primary: 0x7c3aed,      // バイオレット
+  primaryGlow: 0xa855f7,
+  secondary: 0x06b6d4,    // シアン
+  secondaryGlow: 0x22d3ee,
+
+  // 状態
+  success: 0x10b981,
+  warning: 0xf59e0b,
+  danger: 0xef4444,
+
+  // テキスト
+  textPrimary: 0xf8fafc,
+  textSecondary: 0x94a3b8,
+  textMuted: 0x64748b,
+
+  // ボーダー
+  border: 0x334155,
+  borderGlow: 0x7c3aed,
+} as const
 
 // ゲームバランス
 export const BASE_DROP_INTERVAL = 1000

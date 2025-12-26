@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { GameBoard } from './GameBoard'
-import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS, SEVEN_PROBABILITY, LINES_PER_LEVEL, MIN_DROP_INTERVAL, BASE_DROP_INTERVAL, SCORE_PER_BLOCK } from './constants'
+import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS, SEVEN_PROBABILITY, LINES_PER_LEVEL, MIN_DROP_INTERVAL, BASE_DROP_INTERVAL, SCORE_PER_BLOCK, UI_COLORS, GAME_WIDTH, GAME_HEIGHT } from './constants'
 import { BlockEffects } from './BlockEffects'
 
 /**
@@ -68,88 +68,89 @@ export class VersusScene extends Phaser.Scene {
   }
 
   create() {
+    // フェードイン効果
+    this.cameras.main.fadeIn(300, 15, 15, 26)
+
+    // 背景を描画
+    this.drawModernBackground()
+
     // Player 1 のボード（左側）
-    this.player1 = new GameBoard(50, 80)
-    this.p1Effects = new BlockEffects(this, 50, 80)
+    this.player1 = new GameBoard(50, 100)
+    this.p1Effects = new BlockEffects(this, 50, 100)
 
     // Player 2 のボード（右側）
-    this.player2 = new GameBoard(450, 80)
-    this.p2Effects = new BlockEffects(this, 450, 80)
+    this.player2 = new GameBoard(500, 100)
+    this.p2Effects = new BlockEffects(this, 500, 100)
 
     // Graphics
     this.graphics = this.add.graphics()
 
     // Title
-    this.add.text(400, 20, 'VS MODE', {
-      fontSize: '32px',
-      color: '#ffffff',
+    this.add.text(400, 25, 'VS MODE', {
+      fontSize: '28px',
+      color: '#a855f7',
       fontStyle: 'bold',
     }).setOrigin(0.5)
 
-    // Player 1 UI (左上)
-    this.add.text(50, 10, 'Player 1', {
+    // Player 1 パネル
+    this.createPlayerPanel(1, 50, 55)
+    this.p1ScoreText = this.add.text(130, 70, '0', {
       fontSize: '20px',
-      color: '#00ff00',
+      color: '#f8fafc',
       fontStyle: 'bold',
-    })
-    this.p1ScoreText = this.add.text(50, 35, 'Score: 0', {
-      fontSize: '16px',
-      color: '#ffffff',
-    })
-    this.p1LevelText = this.add.text(50, 55, 'Level: 1', {
+    }).setOrigin(0.5)
+    this.p1LevelText = this.add.text(200, 70, 'Lv.1', {
       fontSize: '14px',
-      color: '#aaaaaa',
-    })
-    this.p1ChainText = this.add.text(150, 35, '', {
-      fontSize: '16px',
-      color: '#ffff00',
-    })
+      color: '#10b981',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.p1ChainText = this.add.text(175, 85, '', {
+      fontSize: '14px',
+      color: '#fbbf24',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
 
     // Next display for P1
-    this.add.text(320, 10, 'Next', {
-      fontSize: '14px',
-      color: '#888888',
-    })
+    this.createNextPanel(320, 55)
 
-    // Player 2 UI (右上)
-    this.add.text(450, 10, 'Player 2', {
+    // Player 2 パネル
+    this.createPlayerPanel(2, 500, 55)
+    this.p2ScoreText = this.add.text(580, 70, '0', {
       fontSize: '20px',
-      color: '#ff6600',
+      color: '#f8fafc',
       fontStyle: 'bold',
-    })
-    this.p2ScoreText = this.add.text(450, 35, 'Score: 0', {
-      fontSize: '16px',
-      color: '#ffffff',
-    })
-    this.p2LevelText = this.add.text(450, 55, 'Level: 1', {
+    }).setOrigin(0.5)
+    this.p2LevelText = this.add.text(650, 70, 'Lv.1', {
       fontSize: '14px',
-      color: '#aaaaaa',
-    })
-    this.p2ChainText = this.add.text(550, 35, '', {
-      fontSize: '16px',
-      color: '#ffff00',
-    })
+      color: '#10b981',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+    this.p2ChainText = this.add.text(625, 85, '', {
+      fontSize: '14px',
+      color: '#fbbf24',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
 
     // Next display for P2
-    this.add.text(720, 10, 'Next', {
-      fontSize: '14px',
-      color: '#888888',
-    })
+    this.createNextPanel(770, 55)
 
     // Controls info
-    this.add.text(400, 590, 'P1: WASD | P2: Arrow Keys | P: Pause | R: Restart | ESC: Title', {
+    const controlsBg = this.add.graphics()
+    controlsBg.fillStyle(UI_COLORS.backgroundCard, 0.7)
+    controlsBg.fillRoundedRect(150, 615, 500, 24, 4)
+
+    this.add.text(400, 627, '🎮 P1: A S D  |  P2: ← ↓ →  |  P: Pause', {
       fontSize: '12px',
-      color: '#666666',
+      color: '#64748b',
     }).setOrigin(0.5)
 
     // Pause text
     this.pauseText = this.add
-      .text(400, 300, 'PAUSED\n\nPress P to Resume', {
-        fontSize: '32px',
-        color: '#ffffff',
+      .text(400, 350, '⏸ PAUSED', {
+        fontSize: '36px',
+        color: '#f8fafc',
         align: 'center',
-        backgroundColor: '#000000cc',
-        padding: { x: 30, y: 20 },
+        fontStyle: 'bold',
       })
       .setOrigin(0.5)
       .setVisible(false)
@@ -315,10 +316,10 @@ export class VersusScene extends Phaser.Scene {
     }
 
     // Update UI
-    this.p1ScoreText.setText(`Score: ${this.player1.score}`)
-    this.p1LevelText.setText(`Level: ${this.player1.level}`)
-    this.p2ScoreText.setText(`Score: ${this.player2.score}`)
-    this.p2LevelText.setText(`Level: ${this.player2.level}`)
+    this.p1ScoreText.setText(`${this.player1.score}`)
+    this.p1LevelText.setText(`Lv.${this.player1.level}`)
+    this.p2ScoreText.setText(`${this.player2.score}`)
+    this.p2LevelText.setText(`Lv.${this.player2.level}`)
 
     this.draw()
   }
@@ -486,33 +487,129 @@ export class VersusScene extends Phaser.Scene {
     this.winner = winnerNum
 
     const winnerText = winnerNum === 1 ? 'Player 1 WINS!' : 'Player 2 WINS!'
-    const color = winnerNum === 1 ? '#00ff00' : '#ff6600'
+    const color = winnerNum === 1 ? '#10b981' : '#f59e0b'
+    const borderColor = winnerNum === 1 ? UI_COLORS.success : UI_COLORS.warning
+
+    // 勝利パネル背景
+    const winBg = this.add.graphics()
+    winBg.fillStyle(UI_COLORS.backgroundCard, 0.95)
+    winBg.fillRoundedRect(200, 250, 400, 140, 16)
+    winBg.lineStyle(3, borderColor, 0.8)
+    winBg.strokeRoundedRect(200, 250, 400, 140, 16)
 
     this.add
-      .text(400, 250, winnerText, {
-        fontSize: '48px',
-        color: color,
-        fontStyle: 'bold',
-        align: 'center',
-        stroke: '#000000',
-        strokeThickness: 6,
+      .text(400, 290, '🏆', {
+        fontSize: '32px',
       })
       .setOrigin(0.5)
 
     this.add
-      .text(400, 320, 'R: Restart  ESC: Title', {
-        fontSize: '24px',
-        color: '#ffffff',
+      .text(400, 330, winnerText, {
+        fontSize: '32px',
+        color: color,
+        fontStyle: 'bold',
+        align: 'center',
+      })
+      .setOrigin(0.5)
+
+    this.add
+      .text(400, 370, 'R: Restart  |  ESC: Title', {
+        fontSize: '14px',
+        color: '#94a3b8',
         align: 'center',
       })
       .setOrigin(0.5)
   }
 
   /**
+   * モダン背景を描画（create時に1回だけ）
+   */
+  private drawModernBackground() {
+    const bg = this.add.graphics()
+
+    // 全体背景
+    bg.fillStyle(UI_COLORS.background, 1)
+    bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT)
+
+    // Player 1 ボード背景
+    bg.fillStyle(UI_COLORS.backgroundLight, 1)
+    bg.fillRoundedRect(
+      this.player1?.offsetX ?? 50 - 10,
+      100 - 10,
+      COLS * BLOCK_SIZE + 20,
+      ROWS * BLOCK_SIZE + 20,
+      12
+    )
+    bg.fillStyle(UI_COLORS.background, 0.8)
+    bg.fillRect(this.player1?.offsetX ?? 50, 100, COLS * BLOCK_SIZE, ROWS * BLOCK_SIZE)
+
+    // Player 2 ボード背景
+    bg.fillStyle(UI_COLORS.backgroundLight, 1)
+    bg.fillRoundedRect(
+      500 - 10,
+      100 - 10,
+      COLS * BLOCK_SIZE + 20,
+      ROWS * BLOCK_SIZE + 20,
+      12
+    )
+    bg.fillStyle(UI_COLORS.background, 0.8)
+    bg.fillRect(500, 100, COLS * BLOCK_SIZE, ROWS * BLOCK_SIZE)
+
+    // 中央の「VS」
+    bg.fillStyle(UI_COLORS.primary, 0.1)
+    bg.fillCircle(400, 350, 40)
+
+    this.add.text(400, 350, 'VS', {
+      fontSize: '24px',
+      color: '#7c3aed',
+      fontStyle: 'bold',
+    }).setOrigin(0.5)
+  }
+
+  /**
+   * プレイヤーパネルを作成
+   */
+  private createPlayerPanel(playerNum: number, x: number, y: number) {
+    const panel = this.add.graphics()
+    const color = playerNum === 1 ? UI_COLORS.success : UI_COLORS.warning
+    const labelColor = playerNum === 1 ? '#10b981' : '#f59e0b'
+
+    // パネル背景
+    panel.fillStyle(UI_COLORS.backgroundCard, 0.9)
+    panel.fillRoundedRect(x, y, 200, 40, 8)
+    panel.lineStyle(1, color, 0.5)
+    panel.strokeRoundedRect(x, y, 200, 40, 8)
+
+    // プレイヤーラベル
+    this.add.text(x + 10, y + 20, `P${playerNum}`, {
+      fontSize: '16px',
+      color: labelColor,
+      fontStyle: 'bold',
+    }).setOrigin(0, 0.5)
+  }
+
+  /**
+   * ネクストパネルを作成
+   */
+  private createNextPanel(x: number, y: number) {
+    const panel = this.add.graphics()
+    panel.fillStyle(UI_COLORS.backgroundCard, 0.9)
+    panel.fillRoundedRect(x - 35, y, 70, 70, 8)
+    panel.lineStyle(1, UI_COLORS.border, 0.5)
+    panel.strokeRoundedRect(x - 35, y, 70, 70, 8)
+
+    this.add.text(x, y + 8, 'NEXT', {
+      fontSize: '10px',
+      color: '#64748b',
+    }).setOrigin(0.5)
+  }
+
+  /**
    * 背景とグリッドを描画
    */
   private drawBackground() {
-    this.graphics.lineStyle(2, 0x444444, 1)
+    // グリッド線（より繊細に）
+    this.graphics.lineStyle(1, UI_COLORS.border, 0.3)
 
     // Player 1 grid
     for (let x = 0; x <= COLS; x++) {
@@ -550,14 +647,24 @@ export class VersusScene extends Phaser.Scene {
       )
     }
 
-    // Next block frames
-    this.graphics.lineStyle(2, 0x666666, 1)
-    this.graphics.strokeRect(310, 30, 60, 60) // P1 next
-    this.graphics.strokeRect(710, 30, 60, 60) // P2 next
+    // ボード枠
+    this.graphics.lineStyle(2, UI_COLORS.success, 0.5)
+    this.graphics.strokeRoundedRect(
+      this.player1.offsetX - 2,
+      this.player1.offsetY - 2,
+      COLS * BLOCK_SIZE + 4,
+      ROWS * BLOCK_SIZE + 4,
+      4
+    )
 
-    // Center divider
-    this.graphics.lineStyle(3, 0x666666, 1)
-    this.graphics.lineBetween(400, 60, 400, 580)
+    this.graphics.lineStyle(2, UI_COLORS.warning, 0.5)
+    this.graphics.strokeRoundedRect(
+      this.player2.offsetX - 2,
+      this.player2.offsetY - 2,
+      COLS * BLOCK_SIZE + 4,
+      ROWS * BLOCK_SIZE + 4,
+      4
+    )
   }
 
   /**
@@ -634,37 +741,70 @@ export class VersusScene extends Phaser.Scene {
     y: number,
     value: number
   ) {
-    // Block background
+    const centerX = offsetX + x * BLOCK_SIZE + BLOCK_SIZE / 2
+    const centerY = offsetY + y * BLOCK_SIZE + BLOCK_SIZE / 2
+    const size = BLOCK_SIZE - 4
+    const halfSize = size / 2
+    const radius = 6
+
+    // 7の場合はグロー効果
+    if (value === 7) {
+      this.graphics.fillStyle(COLORS[value], 0.3)
+      this.graphics.fillRoundedRect(
+        centerX - halfSize - 3,
+        centerY - halfSize - 3,
+        size + 6,
+        size + 6,
+        radius + 2
+      )
+    }
+
+    // Block background (角丸)
     this.graphics.fillStyle(COLORS[value], 1)
-    this.graphics.fillRect(
-      offsetX + x * BLOCK_SIZE + 2,
-      offsetY + y * BLOCK_SIZE + 2,
-      BLOCK_SIZE - 4,
-      BLOCK_SIZE - 4
+    this.graphics.fillRoundedRect(
+      centerX - halfSize,
+      centerY - halfSize,
+      size,
+      size,
+      radius
+    )
+
+    // ハイライト（上部）
+    this.graphics.fillStyle(0xffffff, 0.15)
+    this.graphics.fillRoundedRect(
+      centerX - halfSize + 2,
+      centerY - halfSize + 2,
+      size - 4,
+      size * 0.3,
+      { tl: radius - 1, tr: radius - 1, bl: 0, br: 0 }
     )
 
     // Number text
     if (this.textPoolIndex < this.textPool.length) {
       const text = this.textPool[this.textPoolIndex++]
       text.setText(value.toString())
-      text.setPosition(
-        offsetX + x * BLOCK_SIZE + BLOCK_SIZE / 2,
-        offsetY + y * BLOCK_SIZE + BLOCK_SIZE / 2
-      )
+      text.setPosition(centerX, centerY)
       text.setVisible(true)
     }
   }
 
   private drawNextBlock(value: number, x: number, y: number) {
+    const blockSize = 40
+    const actualY = y + 35
+
+    // グロー効果
+    this.graphics.fillStyle(COLORS[value], 0.2)
+    this.graphics.fillRoundedRect(x - blockSize / 2 - 3, actualY - blockSize / 2 - 3, blockSize + 6, blockSize + 6, 8)
+
     // Background
     this.graphics.fillStyle(COLORS[value], 1)
-    this.graphics.fillRect(x - 20, y - 20, 40, 40)
+    this.graphics.fillRoundedRect(x - blockSize / 2, actualY - blockSize / 2, blockSize, blockSize, 6)
 
     // Number
     if (this.textPoolIndex < this.textPool.length) {
       const text = this.textPool[this.textPoolIndex++]
       text.setText(value.toString())
-      text.setPosition(x, y)
+      text.setPosition(x, actualY)
       text.setVisible(true)
     }
   }

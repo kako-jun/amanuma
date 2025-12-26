@@ -9,7 +9,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   parent: 'phaser-game',
-  backgroundColor: '#1a1a2e',
+  backgroundColor: '#0f0f1a',
   scene: [TitleScene, MainScene, VersusScene],
   scale: {
     mode: Phaser.Scale.FIT,
