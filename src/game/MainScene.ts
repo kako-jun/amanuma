@@ -11,13 +11,13 @@ import {
   LINES_PER_LEVEL,
   SCORE_PER_BLOCK,
   CHAIN_BONUS,
-  SEVEN_PROBABILITY,
   STORAGE_KEY_HIGHSCORE,
   UI_COLORS,
   GAME_WIDTH,
   GAME_HEIGHT,
 } from './constants'
 import { BlockEffects } from './BlockEffects'
+import { generateBlockValue } from './random'
 
 export class MainScene extends Phaser.Scene {
   private board: number[][] // 0=空, 1-7=数字ブロック
@@ -96,37 +96,45 @@ export class MainScene extends Phaser.Scene {
     this.createLeftPanel()
 
     // スコア表示
-    this.scoreText = this.add.text(80, 80, '0', {
-      fontSize: '32px',
-      color: '#f8fafc',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
+    this.scoreText = this.add
+      .text(80, 80, '0', {
+        fontSize: '32px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
 
     // ハイスコア表示
-    this.highScoreText = this.add.text(80, 140, `${this.highScore}`, {
-      fontSize: '20px',
-      color: '#fbbf24',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-
-    // レベル表示
-    this.levelText = this.add.text(80, 200, '1', {
-      fontSize: '28px',
-      color: '#10b981',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-
-    // 連鎖表示
-    this.chainText = this.add.text(
-      SINGLE_OFFSET_X + (COLS * BLOCK_SIZE) / 2,
-      SINGLE_OFFSET_Y - 30,
-      '',
-      {
-        fontSize: '24px',
+    this.highScoreText = this.add
+      .text(80, 140, `${this.highScore}`, {
+        fontSize: '20px',
         color: '#fbbf24',
         fontStyle: 'bold',
-      }
-    ).setOrigin(0.5)
+      })
+      .setOrigin(0.5)
+
+    // レベル表示
+    this.levelText = this.add
+      .text(80, 200, '1', {
+        fontSize: '28px',
+        color: '#10b981',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+
+    // 連鎖表示
+    this.chainText = this.add
+      .text(
+        SINGLE_OFFSET_X + (COLS * BLOCK_SIZE) / 2,
+        SINGLE_OFFSET_Y - 30,
+        '',
+        {
+          fontSize: '24px',
+          color: '#fbbf24',
+          fontStyle: 'bold',
+        }
+      )
+      .setOrigin(0.5)
 
     // 一時停止表示（非表示で作成）
     this.pauseText = this.add
@@ -163,12 +171,8 @@ export class MainScene extends Phaser.Scene {
 
     // キーボード入力の設定
     this.cursors = this.input.keyboard!.createCursorKeys()
-    this.rKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.R
-    )
-    this.pKey = this.input.keyboard!.addKey(
-      Phaser.Input.Keyboard.KeyCodes.P
-    )
+    this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
+    this.pKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.P)
 
     // 最初のネクストブロックを生成（確率調整版）
     this.nextBlock = this.generateRandomNumber()
@@ -269,11 +273,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   private generateRandomNumber(): number {
-    const rand = Math.random()
-    if (rand < SEVEN_PROBABILITY) {
-      return 7
-    }
-    return Math.floor(rand * 6.12) + 1
+    return generateBlockValue()
   }
 
   private spawnBlock() {
@@ -448,39 +448,45 @@ export class MainScene extends Phaser.Scene {
       }
 
       // 演出を再生してから消去
-      this.blockEffects.playRemoveAnimation(this.board, result.toRemove, result.hasTripleSeven, this.chainCount > 1, () => {
-        // 実際に消去
-        result.toRemove.forEach(key => {
-          const [x, y] = key.split(',').map(Number)
-          this.board[y][x] = 0
-        })
-
-        // スコア加算
-        this.score += result.toRemove.size * SCORE_PER_BLOCK
-        this.scoreText.setText(`${this.score}`)
-
-        // ライン消去数をカウント
-        this.linesCleared++
-
-        // レベルアップ
-        const newLevel = Math.floor(this.linesCleared / LINES_PER_LEVEL) + 1
-        if (newLevel > this.level) {
-          this.level = newLevel
-          this.levelText.setText(`${this.level}`)
-          this.dropInterval = Math.max(
-            this.baseDropInterval / (1 + (this.level - 1) * 0.1),
-            MIN_DROP_INTERVAL
-          )
-        }
-
-        // 重力を適用（アニメーション付き）
-        this.blockEffects.applyGravityWithAnimation(this.board, () => {
-          // 連鎖チェック
-          this.time.delayedCall(50, () => {
-            this.checkAndClearSevensWithChain()
+      this.blockEffects.playRemoveAnimation(
+        this.board,
+        result.toRemove,
+        result.hasTripleSeven,
+        this.chainCount > 1,
+        () => {
+          // 実際に消去
+          result.toRemove.forEach(key => {
+            const [x, y] = key.split(',').map(Number)
+            this.board[y][x] = 0
           })
-        })
-      })
+
+          // スコア加算
+          this.score += result.toRemove.size * SCORE_PER_BLOCK
+          this.scoreText.setText(`${this.score}`)
+
+          // ライン消去数をカウント
+          this.linesCleared++
+
+          // レベルアップ
+          const newLevel = Math.floor(this.linesCleared / LINES_PER_LEVEL) + 1
+          if (newLevel > this.level) {
+            this.level = newLevel
+            this.levelText.setText(`${this.level}`)
+            this.dropInterval = Math.max(
+              this.baseDropInterval / (1 + (this.level - 1) * 0.1),
+              MIN_DROP_INTERVAL
+            )
+          }
+
+          // 重力を適用（アニメーション付き）
+          this.blockEffects.applyGravityWithAnimation(this.board, () => {
+            // 連鎖チェック
+            this.time.delayedCall(50, () => {
+              this.checkAndClearSevensWithChain()
+            })
+          })
+        }
+      )
     }
   }
 
@@ -526,31 +532,41 @@ export class MainScene extends Phaser.Scene {
     panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 12)
 
     // ラベル
-    this.add.text(80, 55, 'SCORE', {
-      fontSize: '11px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(80, 55, 'SCORE', {
+        fontSize: '11px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
 
-    this.add.text(80, 115, '🏆 BEST', {
-      fontSize: '11px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(80, 115, '🏆 BEST', {
+        fontSize: '11px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
 
-    this.add.text(80, 175, 'LEVEL', {
-      fontSize: '11px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(80, 175, 'LEVEL', {
+        fontSize: '11px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
 
     // 操作ヒント
-    this.add.text(80, 270, '← → ↓', {
-      fontSize: '14px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(80, 270, '← → ↓', {
+        fontSize: '14px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
 
-    this.add.text(80, 290, 'P: Pause', {
-      fontSize: '11px',
-      color: '#475569',
-    }).setOrigin(0.5)
+    this.add
+      .text(80, 290, 'P: Pause', {
+        fontSize: '11px',
+        color: '#475569',
+      })
+      .setOrigin(0.5)
   }
 
   private createRightPanel() {
@@ -568,10 +584,12 @@ export class MainScene extends Phaser.Scene {
     panel.strokeRoundedRect(panelX, panelY, panelWidth, panelHeight, 12)
 
     // NEXT ラベル
-    this.add.text(620, 60, 'NEXT', {
-      fontSize: '12px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(620, 60, 'NEXT', {
+        fontSize: '12px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
   }
 
   private drawBackground() {
@@ -633,11 +651,19 @@ export class MainScene extends Phaser.Scene {
 
     // 演出中のブロックを描画
     const textPoolIndex = { value: this.textPoolIndex }
-    this.blockEffects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.blockEffects.drawAnimatingBlocks(
+      this.graphics,
+      this.textPool,
+      textPoolIndex
+    )
     this.textPoolIndex = textPoolIndex.value
 
     // 落下中のブロックを描画
-    this.blockEffects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.blockEffects.drawFallingBlocks(
+      this.graphics,
+      this.textPool,
+      textPoolIndex
+    )
     this.textPoolIndex = textPoolIndex.value
 
     // 現在のブロックを描画
@@ -657,7 +683,13 @@ export class MainScene extends Phaser.Scene {
     this.drawBlockWithScale(x, y, value, 1, 1)
   }
 
-  private drawBlockWithScale(x: number, y: number, value: number, scale: number, alpha: number) {
+  private drawBlockWithScale(
+    x: number,
+    y: number,
+    value: number,
+    scale: number,
+    alpha: number
+  ) {
     if (scale <= 0 || alpha <= 0) return
 
     const centerX = SINGLE_OFFSET_X + x * BLOCK_SIZE + BLOCK_SIZE / 2
@@ -716,11 +748,23 @@ export class MainScene extends Phaser.Scene {
 
     // ネクストブロックの背景（グロー効果）
     this.graphics.fillStyle(COLORS[this.nextBlock], 0.2)
-    this.graphics.fillRoundedRect(nextX - blockSize / 2 - 5, nextY - blockSize / 2 - 5, blockSize + 10, blockSize + 10, 8)
+    this.graphics.fillRoundedRect(
+      nextX - blockSize / 2 - 5,
+      nextY - blockSize / 2 - 5,
+      blockSize + 10,
+      blockSize + 10,
+      8
+    )
 
     // ネクストブロック
     this.graphics.fillStyle(COLORS[this.nextBlock], 1)
-    this.graphics.fillRoundedRect(nextX - blockSize / 2, nextY - blockSize / 2, blockSize, blockSize, 6)
+    this.graphics.fillRoundedRect(
+      nextX - blockSize / 2,
+      nextY - blockSize / 2,
+      blockSize,
+      blockSize,
+      6
+    )
 
     // ネクストブロックの数字
     if (this.textPoolIndex < this.textPool.length) {

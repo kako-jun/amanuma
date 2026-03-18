@@ -5,8 +5,8 @@ import {
   MIN_DROP_INTERVAL,
   LINES_PER_LEVEL,
   SCORE_PER_BLOCK,
-  SEVEN_PROBABILITY,
 } from './constants'
+import { generateBlockValue } from './random'
 
 /**
  * 1人分のゲームボードを管理するクラス
@@ -52,11 +52,7 @@ export class GameBoard {
 
   /** 確率調整した乱数生成（7は希少） */
   private generateRandomNumber(): number {
-    const rand = Math.random()
-    if (rand < SEVEN_PROBABILITY) {
-      return 7
-    }
-    return Math.floor(rand * 6.12) + 1
+    return generateBlockValue()
   }
 
   /**

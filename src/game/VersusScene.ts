@@ -1,6 +1,20 @@
 import Phaser from 'phaser'
 import { GameBoard } from './GameBoard'
-import { COLS, ROWS, BLOCK_SIZE, COLORS, CHAIN_BONUS, SEVEN_PROBABILITY, LINES_PER_LEVEL, MIN_DROP_INTERVAL, BASE_DROP_INTERVAL, SCORE_PER_BLOCK, UI_COLORS, GAME_WIDTH, GAME_HEIGHT } from './constants'
+import {
+  COLS,
+  ROWS,
+  BLOCK_SIZE,
+  COLORS,
+  CHAIN_BONUS,
+  LINES_PER_LEVEL,
+  MIN_DROP_INTERVAL,
+  BASE_DROP_INTERVAL,
+  SCORE_PER_BLOCK,
+  UI_COLORS,
+  GAME_WIDTH,
+  GAME_HEIGHT,
+} from './constants'
+import { generateBlockValue } from './random'
 import { BlockEffects } from './BlockEffects'
 
 /**
@@ -86,50 +100,64 @@ export class VersusScene extends Phaser.Scene {
     this.graphics = this.add.graphics()
 
     // Title
-    this.add.text(400, 25, 'VS MODE', {
-      fontSize: '28px',
-      color: '#a855f7',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
+    this.add
+      .text(400, 25, 'VS MODE', {
+        fontSize: '28px',
+        color: '#a855f7',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
 
     // Player 1 パネル
     this.createPlayerPanel(1, 50, 55)
-    this.p1ScoreText = this.add.text(130, 70, '0', {
-      fontSize: '20px',
-      color: '#f8fafc',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-    this.p1LevelText = this.add.text(200, 70, 'Lv.1', {
-      fontSize: '14px',
-      color: '#10b981',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-    this.p1ChainText = this.add.text(175, 85, '', {
-      fontSize: '14px',
-      color: '#fbbf24',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
+    this.p1ScoreText = this.add
+      .text(130, 70, '0', {
+        fontSize: '20px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    this.p1LevelText = this.add
+      .text(200, 70, 'Lv.1', {
+        fontSize: '14px',
+        color: '#10b981',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    this.p1ChainText = this.add
+      .text(175, 85, '', {
+        fontSize: '14px',
+        color: '#fbbf24',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
 
     // Next display for P1
     this.createNextPanel(320, 55)
 
     // Player 2 パネル
     this.createPlayerPanel(2, 500, 55)
-    this.p2ScoreText = this.add.text(580, 70, '0', {
-      fontSize: '20px',
-      color: '#f8fafc',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-    this.p2LevelText = this.add.text(650, 70, 'Lv.1', {
-      fontSize: '14px',
-      color: '#10b981',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
-    this.p2ChainText = this.add.text(625, 85, '', {
-      fontSize: '14px',
-      color: '#fbbf24',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
+    this.p2ScoreText = this.add
+      .text(580, 70, '0', {
+        fontSize: '20px',
+        color: '#f8fafc',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    this.p2LevelText = this.add
+      .text(650, 70, 'Lv.1', {
+        fontSize: '14px',
+        color: '#10b981',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
+    this.p2ChainText = this.add
+      .text(625, 85, '', {
+        fontSize: '14px',
+        color: '#fbbf24',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
 
     // Next display for P2
     this.createNextPanel(770, 55)
@@ -139,10 +167,12 @@ export class VersusScene extends Phaser.Scene {
     controlsBg.fillStyle(UI_COLORS.backgroundCard, 0.7)
     controlsBg.fillRoundedRect(150, 615, 500, 24, 4)
 
-    this.add.text(400, 627, '🎮 P1: A S D  |  P2: ← ↓ →  |  P: Pause', {
-      fontSize: '12px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(400, 627, '🎮 P1: A S D  |  P2: ← ↓ →  |  P: Pause', {
+        fontSize: '12px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
 
     // Pause text
     this.pauseText = this.add
@@ -178,7 +208,9 @@ export class VersusScene extends Phaser.Scene {
       d: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     }
     this.rKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.R)
-    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC)
+    this.escKey = this.input.keyboard!.addKey(
+      Phaser.Input.Keyboard.KeyCodes.ESC
+    )
 
     // 共有ブロックキューを初期化
     this.sharedBlockQueue = []
@@ -214,11 +246,7 @@ export class VersusScene extends Phaser.Scene {
 
   /** 共有ブロック生成（確率調整） */
   private generateSharedBlock(): number {
-    const rand = Math.random()
-    if (rand < SEVEN_PROBABILITY) {
-      return 7
-    }
-    return Math.floor(rand * 6.12) + 1
+    return generateBlockValue()
   }
 
   /** 共有キューから次のブロックを取得 */
@@ -372,7 +400,11 @@ export class VersusScene extends Phaser.Scene {
   /**
    * ブロック落下処理と攻撃システム
    */
-  private handleDrop(player: GameBoard, opponent: GameBoard, playerNum: number) {
+  private handleDrop(
+    player: GameBoard,
+    opponent: GameBoard,
+    playerNum: number
+  ) {
     const landed = player.drop()
 
     if (landed) {
@@ -442,41 +474,50 @@ export class VersusScene extends Phaser.Scene {
       }
 
       // 演出を再生してから消去
-      effects.playRemoveAnimation(player.board, result.toRemove, result.hasTripleSeven, player.chainCount > 1, () => {
-        // 実際に消去
-        result.toRemove.forEach(key => {
-          const [x, y] = key.split(',').map(Number)
-          player.board[y][x] = 0
-        })
-
-        // スコア加算
-        player.score += result.toRemove.size * SCORE_PER_BLOCK
-        player.linesCleared++
-
-        // レベルアップ処理
-        const newLevel = Math.floor(player.linesCleared / LINES_PER_LEVEL) + 1
-        if (newLevel > player.level) {
-          player.level = newLevel
-          player.dropInterval = Math.max(
-            BASE_DROP_INTERVAL / (1 + (player.level - 1) * 0.1),
-            MIN_DROP_INTERVAL
-          )
-        }
-
-        // Attack: send garbage blocks to opponent
-        if (player.chainCount > 0) {
-          const garbageCount = Math.max(1, Math.floor(result.toRemove.size / 3))
-          opponent.addGarbageBlocks(garbageCount)
-        }
-
-        // 重力を適用（アニメーション付き）
-        effects.applyGravityWithAnimation(player.board, () => {
-          // Continue chain check
-          this.time.delayedCall(50, () => {
-            this.checkAndClearWithChain(player, opponent, playerNum)
+      effects.playRemoveAnimation(
+        player.board,
+        result.toRemove,
+        result.hasTripleSeven,
+        player.chainCount > 1,
+        () => {
+          // 実際に消去
+          result.toRemove.forEach(key => {
+            const [x, y] = key.split(',').map(Number)
+            player.board[y][x] = 0
           })
-        })
-      })
+
+          // スコア加算
+          player.score += result.toRemove.size * SCORE_PER_BLOCK
+          player.linesCleared++
+
+          // レベルアップ処理
+          const newLevel = Math.floor(player.linesCleared / LINES_PER_LEVEL) + 1
+          if (newLevel > player.level) {
+            player.level = newLevel
+            player.dropInterval = Math.max(
+              BASE_DROP_INTERVAL / (1 + (player.level - 1) * 0.1),
+              MIN_DROP_INTERVAL
+            )
+          }
+
+          // Attack: send garbage blocks to opponent
+          if (player.chainCount > 0) {
+            const garbageCount = Math.max(
+              1,
+              Math.floor(result.toRemove.size / 3)
+            )
+            opponent.addGarbageBlocks(garbageCount)
+          }
+
+          // 重力を適用（アニメーション付き）
+          effects.applyGravityWithAnimation(player.board, () => {
+            // Continue chain check
+            this.time.delayedCall(50, () => {
+              this.checkAndClearWithChain(player, opponent, playerNum)
+            })
+          })
+        }
+      )
     }
   }
 
@@ -541,7 +582,12 @@ export class VersusScene extends Phaser.Scene {
       12
     )
     bg.fillStyle(UI_COLORS.background, 0.8)
-    bg.fillRect(this.player1?.offsetX ?? 50, 100, COLS * BLOCK_SIZE, ROWS * BLOCK_SIZE)
+    bg.fillRect(
+      this.player1?.offsetX ?? 50,
+      100,
+      COLS * BLOCK_SIZE,
+      ROWS * BLOCK_SIZE
+    )
 
     // Player 2 ボード背景
     bg.fillStyle(UI_COLORS.backgroundLight, 1)
@@ -559,11 +605,13 @@ export class VersusScene extends Phaser.Scene {
     bg.fillStyle(UI_COLORS.primary, 0.1)
     bg.fillCircle(400, 350, 40)
 
-    this.add.text(400, 350, 'VS', {
-      fontSize: '24px',
-      color: '#7c3aed',
-      fontStyle: 'bold',
-    }).setOrigin(0.5)
+    this.add
+      .text(400, 350, 'VS', {
+        fontSize: '24px',
+        color: '#7c3aed',
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5)
   }
 
   /**
@@ -581,11 +629,13 @@ export class VersusScene extends Phaser.Scene {
     panel.strokeRoundedRect(x, y, 200, 40, 8)
 
     // プレイヤーラベル
-    this.add.text(x + 10, y + 20, `P${playerNum}`, {
-      fontSize: '16px',
-      color: labelColor,
-      fontStyle: 'bold',
-    }).setOrigin(0, 0.5)
+    this.add
+      .text(x + 10, y + 20, `P${playerNum}`, {
+        fontSize: '16px',
+        color: labelColor,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0, 0.5)
   }
 
   /**
@@ -598,10 +648,12 @@ export class VersusScene extends Phaser.Scene {
     panel.lineStyle(1, UI_COLORS.border, 0.5)
     panel.strokeRoundedRect(x - 35, y, 70, 70, 8)
 
-    this.add.text(x, y + 8, 'NEXT', {
-      fontSize: '10px',
-      color: '#64748b',
-    }).setOrigin(0.5)
+    this.add
+      .text(x, y + 8, 'NEXT', {
+        fontSize: '10px',
+        color: '#64748b',
+      })
+      .setOrigin(0.5)
   }
 
   /**
@@ -686,8 +738,16 @@ export class VersusScene extends Phaser.Scene {
 
     // Draw Player 1
     this.drawBoard(this.player1, this.p1Effects)
-    this.p1Effects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
-    this.p1Effects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.p1Effects.drawAnimatingBlocks(
+      this.graphics,
+      this.textPool,
+      textPoolIndex
+    )
+    this.p1Effects.drawFallingBlocks(
+      this.graphics,
+      this.textPool,
+      textPoolIndex
+    )
     if (this.player1.currentBlock) {
       this.drawBlock(
         this.player1.offsetX,
@@ -701,8 +761,16 @@ export class VersusScene extends Phaser.Scene {
 
     // Draw Player 2
     this.drawBoard(this.player2, this.p2Effects)
-    this.p2Effects.drawAnimatingBlocks(this.graphics, this.textPool, textPoolIndex)
-    this.p2Effects.drawFallingBlocks(this.graphics, this.textPool, textPoolIndex)
+    this.p2Effects.drawAnimatingBlocks(
+      this.graphics,
+      this.textPool,
+      textPoolIndex
+    )
+    this.p2Effects.drawFallingBlocks(
+      this.graphics,
+      this.textPool,
+      textPoolIndex
+    )
     if (this.player2.currentBlock) {
       this.drawBlock(
         this.player2.offsetX,
@@ -722,13 +790,7 @@ export class VersusScene extends Phaser.Scene {
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
         if (board.board[y][x] !== 0 && !excludedKeys.has(`${x},${y}`)) {
-          this.drawBlock(
-            board.offsetX,
-            board.offsetY,
-            x,
-            y,
-            board.board[y][x]
-          )
+          this.drawBlock(board.offsetX, board.offsetY, x, y, board.board[y][x])
         }
       }
     }
@@ -794,11 +856,23 @@ export class VersusScene extends Phaser.Scene {
 
     // グロー効果
     this.graphics.fillStyle(COLORS[value], 0.2)
-    this.graphics.fillRoundedRect(x - blockSize / 2 - 3, actualY - blockSize / 2 - 3, blockSize + 6, blockSize + 6, 8)
+    this.graphics.fillRoundedRect(
+      x - blockSize / 2 - 3,
+      actualY - blockSize / 2 - 3,
+      blockSize + 6,
+      blockSize + 6,
+      8
+    )
 
     // Background
     this.graphics.fillStyle(COLORS[value], 1)
-    this.graphics.fillRoundedRect(x - blockSize / 2, actualY - blockSize / 2, blockSize, blockSize, 6)
+    this.graphics.fillRoundedRect(
+      x - blockSize / 2,
+      actualY - blockSize / 2,
+      blockSize,
+      blockSize,
+      6
+    )
 
     // Number
     if (this.textPoolIndex < this.textPool.length) {
