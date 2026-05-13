@@ -222,13 +222,11 @@ export class BeakerFrame extends Container {
     const hiInset = 3
     const hiTopX = boardWidth - taperPx * (hiYStart / boardHeight) - hiInset
     const hiBotX = boardWidth - taperPx * (hiYEnd / boardHeight) - hiInset
-    g.moveTo(hiTopX, hiYStart)
-      .lineTo(hiBotX, hiYEnd)
-      .stroke({
-        color: HIGHLIGHT_COLOR,
-        alpha: HIGHLIGHT_ALPHA,
-        width: HIGHLIGHT_WIDTH_PX,
-      })
+    g.moveTo(hiTopX, hiYStart).lineTo(hiBotX, hiYEnd).stroke({
+      color: HIGHLIGHT_COLOR,
+      alpha: HIGHLIGHT_ALPHA,
+      width: HIGHLIGHT_WIDTH_PX,
+    })
 
     // 左側面の薄い影。左下にかけて影が落ちている表現。
     // 同じく壁の少し内側に。
@@ -237,13 +235,11 @@ export class BeakerFrame extends Container {
     const shInset = 3
     const shTopX = taperPx * (shYStart / boardHeight) + shInset
     const shBotX = taperPx * (shYEnd / boardHeight) + shInset
-    g.moveTo(shTopX, shYStart)
-      .lineTo(shBotX, shYEnd)
-      .stroke({
-        color: SHADOW_COLOR,
-        alpha: SHADOW_ALPHA,
-        width: SHADOW_WIDTH_PX,
-      })
+    g.moveTo(shTopX, shYStart).lineTo(shBotX, shYEnd).stroke({
+      color: SHADOW_COLOR,
+      alpha: SHADOW_ALPHA,
+      width: SHADOW_WIDTH_PX,
+    })
 
     // リップ上面の薄いハイライト (口の角に光が当たる)。
     g.moveTo(-lipExtensionPx + 2, -lipHeightPx + 1)
