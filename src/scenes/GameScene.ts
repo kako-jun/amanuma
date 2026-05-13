@@ -3,6 +3,8 @@ import { Container } from 'pixi.js'
 import type { GameState } from '../types/GameState'
 import { CELL_SIZE } from '../constants/colors'
 import { BoardRenderer } from './BoardRenderer'
+import { BubbleParticleSystem } from './effects/BubbleParticleSystem'
+import { WaterSurface } from './effects/WaterSurface'
 import { stepUnderwaterPhysics } from '../physics/UnderwaterPhysics'
 import {
   canMoveFallingTo,
@@ -40,6 +42,10 @@ export class GameScene {
   private readonly container: Container
   private readonly app: Application
   private renderer: BoardRenderer | null = null
+  /** 着水エフェクト用パーティクル (Issue #17、#19 でも共用予定)。 */
+  private bubbles: BubbleParticleSystem | null = null
+  /** 水面の波打ち (Issue #17)。 */
+  private water: WaterSurface | null = null
   /** Ticker に登録した関数の参照 (destroy 時の remove 用)。 */
   private tickerFn: ((ticker: Ticker) => void) | null = null
   /**
@@ -90,6 +96,14 @@ export class GameScene {
       this.renderer.destroy({ children: true })
       this.renderer = null
     }
+    if (this.water) {
+      this.water.destroy({ children: true })
+      this.water = null
+    }
+    if (this.bubbles) {
+      this.bubbles.destroy({ children: true })
+      this.bubbles = null
+    }
 
     const renderer = new BoardRenderer(state, { cellSize: CELL_SIZE })
     // 中央寄せ (Canvas の幅・高さは Application で 800x650)。
@@ -99,6 +113,26 @@ export class GameScene {
     renderer.y = (this.app.screen.height - boardHeightPx) / 2
     this.container.addChild(renderer)
     this.renderer = renderer
+
+    // 水面 & パーティクルレイヤー (Issue #17)。盤面の上に重ねる。
+    // 座標は BoardRenderer と同じローカル原点 (盤面左上 = 水面左端)。
+    const water = new WaterSurface(boardWidthPx)
+    water.x = renderer.x
+    water.y = renderer.y
+    this.container.addChild(water)
+    this.water = water
+
+    const bubbles = new BubbleParticleSystem()
+    bubbles.x = renderer.x
+    bubbles.y = renderer.y
+    this.container.addChild(bubbles)
+    this.bubbles = bubbles
+
+    // 最初の fallingBlock がスポーン済みなら、スポーン演出を発火する。
+    // (initWithState は中の fallingBlock を既に持っている前提が多いため)
+    if (state.fallingBlock !== null) {
+      this.emitSpawnEffect(state.fallingBlock.col)
+    }
 
     // Ticker は最初の initWithState で一度だけ登録する (重複登録防止)。
     if (!this.tickerFn) {
@@ -137,6 +171,8 @@ export class GameScene {
     this.container.destroy({ children: true })
     this.state = null
     this.renderer = null
+    this.water = null
+    this.bubbles = null
   }
 
   // ----------------------------------------------------------------------
@@ -154,12 +190,16 @@ export class GameScene {
     const state = this.state
     if (state === null) {
       this.renderer?.update()
+      this.water?.update()
+      this.bubbles?.update(ticker.deltaMS)
       return
     }
 
-    // クリア / ゲームオーバー中は物理停止。
+    // クリア / ゲームオーバー中は物理停止 (エフェクトは進める)。
     if (state.status !== 'playing') {
       this.renderer?.update()
+      this.water?.update()
+      this.bubbles?.update(ticker.deltaMS)
       return
     }
 
@@ -173,13 +213,18 @@ export class GameScene {
         state.fallingBlock.row >= landingRow
       ) {
         // 着地: row をスナップして board に固定。
+        const landedCol = state.fallingBlock.col
         state.fallingBlock.row = landingRow
         lockFallingBlock(state)
+        // 着水エフェクト (Issue #17): 波紋・泡・セル横揺れ。
+        this.emitLandEffect(landingRow, landedCol)
         this.startChainSequence()
       }
     }
 
     this.renderer?.update()
+    this.water?.update()
+    this.bubbles?.update(ticker.deltaMS)
   }
 
   /**
@@ -210,15 +255,49 @@ export class GameScene {
       }
 
       // 次の fallingBlock をスポーン。
+      const spawnCol = Math.floor(state.cols / 2)
       state.fallingBlock = {
         value: state.nextBlock,
-        col: Math.floor(state.cols / 2),
+        col: spawnCol,
         row: 0,
         velocity: 0,
       }
       state.nextBlock = generateBlockValue()
+      // 「Next から水面に たぷん」: 波紋 (弱め) + 泡 (上向き) を出す。
+      this.emitSpawnEffect(spawnCol)
       this.isChaining = false
     })
+  }
+
+  /**
+   * Next スポーン時の演出 (Issue #17)。
+   * - 水面の波紋 (intensity = 0.7、控えめ)
+   * - 上方向に立ち上がる小さな泡 (count = 3、`kind: 'spawn'`)
+   */
+  private emitSpawnEffect(col: number): void {
+    const state = this.state
+    if (state === null) return
+    const xPx = col * CELL_SIZE + CELL_SIZE / 2
+    // 水面は y = 0 (盤面最上段)。
+    this.water?.splash(xPx, 0.7)
+    this.bubbles?.emitBubbles({ x: xPx, y: 0, kind: 'spawn', count: 3 })
+  }
+
+  /**
+   * 着水時の演出 (Issue #17)。
+   * - 水面の波紋 (intensity = 1.0)
+   * - 着水点で立ち上がる泡 (count = 4、`kind: 'land'`)
+   * - 着水セルを横揺れ (`BoardRenderer.shake`)
+   */
+  private emitLandEffect(row: number, col: number): void {
+    const xPx = col * CELL_SIZE + CELL_SIZE / 2
+    // 「水面の波紋」は水面 (y=0) で起こす方が画面的にわかりやすいので、
+    // 着水セルの x 位置にしか連動させない (y は水面固定)。
+    this.water?.splash(xPx, 1.0)
+    // 泡は着水点から立ち上がらせる。
+    const landY = row * CELL_SIZE + CELL_SIZE / 2
+    this.bubbles?.emitBubbles({ x: xPx, y: landY, kind: 'land', count: 4 })
+    this.renderer?.shake(row, col)
   }
 
   // ----------------------------------------------------------------------
