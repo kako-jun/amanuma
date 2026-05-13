@@ -4,9 +4,26 @@ import type { GameState } from '../types/GameState'
 import { CELL_SIZE } from '../constants/colors'
 import { BoardRenderer } from './BoardRenderer'
 import { stepUnderwaterPhysics } from '../physics/UnderwaterPhysics'
-import { countSevens, findLandingRow, lockFallingBlock } from '../game/board'
+import {
+  canMoveFallingTo,
+  countSevens,
+  findLandingRow,
+  lockFallingBlock,
+} from '../game/board'
 import { runChain } from '../game/ChainRunner'
 import { generateBlockValue } from '../game/randomBlocks'
+import { KeyboardManager, type KeyboardCommand } from '../input/KeyboardManager'
+import { TouchManager, type TouchCommand } from '../input/TouchManager'
+import { DROP_BOOST_VELOCITY } from '../input/constants'
+
+/**
+ * リスタート時に「現在のお題」を取得するための最小インタフェース。
+ * `PuzzleRotation` を直接型として受けると loadPuzzle に依存するため、
+ * 必要な API だけを構造的に切り出す。
+ */
+export interface RestartSource {
+  build(): GameState | null
+}
 
 /**
  * ゲーム本編シーン。
@@ -33,10 +50,26 @@ export class GameScene {
    */
   private isChaining: boolean = false
 
+  // 入力 (Issue #20)
+  private readonly keyboard: KeyboardManager = new KeyboardManager()
+  private readonly touch: TouchManager = new TouchManager()
+  /** リスタート用のお題ソース。未設定なら R キー / restart コマンドは no-op。 */
+  private restartSource: RestartSource | null = null
+  private inputUnsubscribers: (() => void)[] = []
+
   constructor(app: Application) {
     this.app = app
     this.container = new Container()
     this.app.stage.addChild(this.container)
+  }
+
+  /**
+   * R キー / restart コマンドで「現在のお題」から再構築するためのソースを設定する。
+   * 未設定の場合は restart コマンドは no-op になる (タイトル画面未実装の今 Issue では
+   * これで十分)。
+   */
+  setRestartSource(source: RestartSource | null): void {
+    this.restartSource = source
   }
 
   /**
@@ -74,6 +107,9 @@ export class GameScene {
       }
       this.app.ticker.add(this.tickerFn)
     }
+
+    // 入力ハンドラも一度だけ登録する。再初期化時はそのまま使い回す。
+    this.setupInput()
   }
 
   /** 現在保持している state を返す (デバッグ・テスト用、参照を返す)。 */
@@ -92,6 +128,12 @@ export class GameScene {
       this.app.ticker.remove(this.tickerFn)
       this.tickerFn = null
     }
+    // 入力ハンドラ解除。
+    for (const unsub of this.inputUnsubscribers) unsub()
+    this.inputUnsubscribers = []
+    this.keyboard.detach()
+    this.touch.detach()
+
     this.container.destroy({ children: true })
     this.state = null
     this.renderer = null
@@ -177,5 +219,142 @@ export class GameScene {
       state.nextBlock = generateBlockValue()
       this.isChaining = false
     })
+  }
+
+  // ----------------------------------------------------------------------
+  // 入力ハンドリング (Issue #20)
+  // ----------------------------------------------------------------------
+
+  /**
+   * KeyboardManager / TouchManager を初期化し、コマンドを購読する。
+   * 二重呼び出し時は no-op (`inputUnsubscribers` が空でない場合)。
+   *
+   * canvas は `app.canvas` を使うが、テスト等で canvas 未生成のケースは
+   * try/catch で握りつぶす (本番では起きない想定だが防御的に書く)。
+   */
+  private setupInput(): void {
+    if (this.inputUnsubscribers.length > 0) return
+
+    this.keyboard.attach(window)
+    try {
+      // app.canvas は PIXI.Application 初期化済みなら HTMLCanvasElement。
+      const canvas = this.app.canvas
+      if (canvas instanceof HTMLCanvasElement) {
+        this.touch.attach(canvas)
+      }
+    } catch {
+      // canvas 取得に失敗してもキーボードだけは生かす。
+    }
+
+    const unsubKb = this.keyboard.onCommand(cmd => this.handleKeyboard(cmd))
+    const unsubTouch = this.touch.onCommand(cmd => this.handleTouch(cmd))
+    this.inputUnsubscribers.push(unsubKb, unsubTouch)
+  }
+
+  /**
+   * KeyboardCommand を game state 操作に変換する。
+   *
+   * 入力封じ条件:
+   *   - 状態が 'playing' でない (paused/cleared/gameover) 場合、move/drop は無視。
+   *   - 連鎖中 (`isChaining` = true) も move/drop は無視。
+   *   - togglePause: paused ↔ playing のみ。cleared / gameover では無視。
+   *   - restart: 常時有効 (cleared / gameover からの復帰に必要)。
+   */
+  private handleKeyboard(cmd: KeyboardCommand): void {
+    switch (cmd) {
+      case 'left':
+        this.tryMove(-1)
+        break
+      case 'right':
+        this.tryMove(+1)
+        break
+      case 'drop':
+        this.tryDrop()
+        break
+      case 'togglePause':
+        this.togglePause()
+        break
+      case 'restart':
+        this.restart()
+        break
+    }
+  }
+
+  /** TouchCommand を game state 操作に変換する。キーボードと同じ封じ条件。 */
+  private handleTouch(cmd: TouchCommand): void {
+    switch (cmd) {
+      case 'left':
+        this.tryMove(-1)
+        break
+      case 'right':
+        this.tryMove(+1)
+        break
+      case 'drop':
+        this.tryDrop()
+        break
+    }
+  }
+
+  /** 左右移動を試みる。封じ条件 / 衝突判定をまとめてチェック。 */
+  private tryMove(deltaCol: number): void {
+    const state = this.state
+    if (state === null) return
+    if (state.status !== 'playing') return
+    if (this.isChaining) return
+    const falling = state.fallingBlock
+    if (falling === null) return
+    const newCol = falling.col + deltaCol
+    if (!canMoveFallingTo(state, newCol)) return
+    falling.col = newCol
+  }
+
+  /** ↓ / 下スワイプ: velocity を加速して高速落下。 */
+  private tryDrop(): void {
+    const state = this.state
+    if (state === null) return
+    if (state.status !== 'playing') return
+    if (this.isChaining) return
+    const falling = state.fallingBlock
+    if (falling === null) return
+    falling.velocity += DROP_BOOST_VELOCITY
+  }
+
+  /**
+   * P: playing ↔ paused 切替。
+   *
+   * cleared / gameover は終端状態のため切替の意味が無く、無視する。
+   */
+  private togglePause(): void {
+    const state = this.state
+    if (state === null) return
+    if (state.status === 'playing') {
+      state.status = 'paused'
+    } else if (state.status === 'paused') {
+      state.status = 'playing'
+    }
+  }
+
+  /**
+   * R: 現在のお題で再スタート。
+   *
+   * `setRestartSource()` で渡された source から GameState を再生成する。
+   * source 未設定または build 失敗時は何もしない。
+   * fallingBlock 未設定なら main.ts と同じく Next ベースで補充する。
+   */
+  private restart(): void {
+    const source = this.restartSource
+    if (source === null) return
+    const nextState = source.build()
+    if (nextState === null) return
+    if (nextState.fallingBlock === null) {
+      nextState.fallingBlock = {
+        value: nextState.nextBlock,
+        col: Math.floor(nextState.cols / 2),
+        row: 0,
+        velocity: 0,
+      }
+      nextState.nextBlock = generateBlockValue()
+    }
+    this.initWithState(nextState)
   }
 }

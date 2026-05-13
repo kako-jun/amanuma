@@ -39,6 +39,18 @@ async function bootstrap(): Promise<void> {
     state = createInitialGameState()
   }
 
+  // Issue #20: R キーで現在のお題から再構築できるようにする。
+  scene.setRestartSource({
+    build: () => {
+      const r = buildGameStateFromPuzzle(rotation.current())
+      if (!r.ok) {
+        console.error('[amanuma] restart failed:', r.error)
+        return null
+      }
+      return r.state
+    },
+  })
+
   // Issue #18: Next ベースのスポーン。
   // - お題側で `fallingBlock` が設定されていればそれを尊重する (再現テスト用)。
   // - 未設定なら state.nextBlock を最初の落下ブロックとし、Next 枠は新たに
