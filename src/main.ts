@@ -1,4 +1,6 @@
 import { Application } from 'pixi.js'
+import { GameScene } from './scenes/GameScene'
+import { createInitialGameState } from './types/GameState'
 import './index.css'
 
 async function bootstrap(): Promise<void> {
@@ -20,6 +22,9 @@ async function bootstrap(): Promise<void> {
   })
 
   container.appendChild(app.canvas)
+
+  const scene = new GameScene(app)
+  scene.initWithState(createInitialGameState())
 }
 
 void bootstrap()
