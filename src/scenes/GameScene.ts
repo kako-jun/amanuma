@@ -3,6 +3,7 @@ import { Container } from 'pixi.js'
 import type { GameState } from '../types/GameState'
 import { CELL_SIZE } from '../constants/colors'
 import { BoardRenderer } from './BoardRenderer'
+import { stepUnderwaterPhysics } from '../physics/UnderwaterPhysics'
 
 /**
  * ゲーム本編シーン。
@@ -55,8 +56,12 @@ export class GameScene {
     this.renderer = renderer
 
     // Ticker は最初の initWithState で一度だけ登録する (重複登録防止)。
+    // 物理 → 描画の順で呼び出す: 同一フレーム内で最新位置をそのまま描画したい。
     if (!this.tickerFn) {
-      this.tickerFn = (): void => {
+      this.tickerFn = (ticker: Ticker): void => {
+        if (this.state !== null) {
+          stepUnderwaterPhysics(this.state, ticker.deltaMS)
+        }
         this.renderer?.update()
       }
       this.app.ticker.add(this.tickerFn)
