@@ -27,6 +27,16 @@ export interface ChainResult {
 export interface RunChainOptions {
   /** 1 ステップごとの待機時間 (ms)。テスト時に 0 にするためのフック。 */
   stepDelayMs?: number
+  /**
+   * 消去が発生する直前 (= clearCells 呼び出しの直前) に呼ばれるコールバック。
+   *
+   * 引数は消去対象セル位置の `Set<row * cols + col>` (= board の通り `findClearablePositions`
+   * が返したそのもの)。GameScene 側で各位置に水中爆発エフェクト (Issue #19) を発火するための
+   * 通知フック。コールバック内で state を破壊的に変更してはいけない (描画系の発火専用)。
+   *
+   * 何も消去がないステップ (ループ終了条件) では呼ばれない。
+   */
+  onClear?: (positions: Set<number>) => void
 }
 
 function delay(ms: number): Promise<void> {
@@ -63,6 +73,10 @@ export async function runChain(
 
     // 消去の直前に 1 ステップ wait (= 着水エフェクト → 爆発の溜め)。
     await delay(stepDelayMs)
+
+    // 消去直前に通知フック (#19): GameScene 側で位置情報を元に泡を発火する。
+    // clearCells 後だと位置情報が失われるので必ずここで呼ぶ。
+    opts.onClear?.(positions)
 
     const cleared = clearCells(state, positions)
     totalClears += cleared
