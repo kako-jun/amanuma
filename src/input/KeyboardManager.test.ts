@@ -60,9 +60,30 @@ describe('KeyboardManager', () => {
 
   it('未対応キーは通知されない', () => {
     fire('a')
-    fire('Enter')
-    fire('Escape')
+    fire('z')
+    fire('F1')
     expect(received).toEqual([])
+  })
+
+  it('1 → select1', () => {
+    fire('1')
+    expect(received).toEqual(['select1'])
+  })
+
+  it('2 → select2', () => {
+    fire('2')
+    expect(received).toEqual(['select2'])
+  })
+
+  it('Escape → cancel', () => {
+    fire('Escape')
+    expect(received).toEqual(['cancel'])
+  })
+
+  it('Enter / 空白 → confirm', () => {
+    fire('Enter')
+    fire(' ')
+    expect(received).toEqual(['confirm', 'confirm'])
   })
 
   it('対応キーは preventDefault される', () => {

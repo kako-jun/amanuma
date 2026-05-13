@@ -9,6 +9,7 @@
 > Issue #18 で消去・連鎖ロジック (`src/game/`) と Vitest を追加した。
 > Issue #20 でキーボード・タッチ入力 (`src/input/`) と一時停止・リスタートを追加した。
 > Issue #17 で着水エフェクト (`src/scenes/effects/`) を追加した。
+> Issue #21 で `SceneManager` + `TitleScene` / `VersusScene` / `ResultScene` / `PlayerBoard` を追加し、誌面パン&ズーム演出を導入した。
 
 ## 技術スタック
 
@@ -33,7 +34,12 @@ src/
 │   ├── puzzles.json        # お題コレクション (tutorial-01 / 02 / 03 を同梱)
 │   └── loadPuzzle.ts       # listPuzzles / getPuzzleById / buildGameStateFromPuzzle / PuzzleRotation
 ├── scenes/
-│   ├── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
+│   ├── SceneManager.ts     # 巨大誌面 (world) と navigateTo() による cubicInOut tween (Issue #21)
+│   ├── PlayerBoard.ts      # 1 プレイヤー分の物理・連鎖・スポーン・着水演出 (Issue #21 で抽出)
+│   ├── GameScene.ts        # シングル用シーン (PlayerBoard を 1 個保持する薄いラッパ)
+│   ├── VersusScene.ts      # 対戦用シーン (PlayerBoard を 2 個 + お邪魔ブロック送信 MVP, Issue #21)
+│   ├── TitleScene.ts       # タイトル画面 (グラスボタン 3 種, Issue #21)
+│   ├── ResultScene.ts      # リザルト画面 (cleared/gameover/win/lose 表示, Issue #21)
 │   ├── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画 (shake API は Issue #17)
 │   └── effects/            # Issue #17
 │       ├── BubbleParticleSystem.ts # 泡パーティクル (spawn/land/clear、#19 で共用予定)
@@ -306,14 +312,14 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 
 `BubbleParticleSystem` の `VARIANT_PARAMS.clear` で定義:
 
-| パラメータ | 値                | 備考                                                  |
-| ---------- | ----------------- | ----------------------------------------------------- |
-| 個数       | 4 (固定)          | `GameScene.emitClearBubbles` で `count: 4` を渡す     |
-| 上昇速度   | -25..-45 px/s     | `'land'` / `'spawn'` (-30..-70) よりも遅め            |
-| 寿命       | 1500..2500 ms     | 水面に向けてゆっくり昇る尺                            |
-| 半径       | 2..5 px           | 元ブロック (48px 矩形) よりかなり小さい               |
-| 横揺れ     | ±10 px sin        | 周期は他バリアントと共通 (`sin(ageMs / 200)`)         |
-| 色 / alpha | `0xffffff` / 0.55 | 半透明白で水中の気泡感                                |
+| パラメータ | 値                | 備考                                              |
+| ---------- | ----------------- | ------------------------------------------------- |
+| 個数       | 4 (固定)          | `GameScene.emitClearBubbles` で `count: 4` を渡す |
+| 上昇速度   | -25..-45 px/s     | `'land'` / `'spawn'` (-30..-70) よりも遅め        |
+| 寿命       | 1500..2500 ms     | 水面に向けてゆっくり昇る尺                        |
+| 半径       | 2..5 px           | 元ブロック (48px 矩形) よりかなり小さい           |
+| 横揺れ     | ±10 px sin        | 周期は他バリアントと共通 (`sin(ageMs / 200)`)     |
+| 色 / alpha | `0xffffff` / 0.55 | 半透明白で水中の気泡感                            |
 
 ### 呼び出しタイミング (`GameScene`)
 
@@ -327,7 +333,7 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 - 連鎖カウント表示は別 Issue。
 - 音は #22。
 
-## テスト (Issue #18 / #20 / #17 / #19)
+## テスト (Issue #18 / #20 / #17 / #19 / #21)
 
 Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`と`src/scenes/**`** を jsdom 環境、それ以外は Node 環境で動かす。
 
@@ -340,6 +346,9 @@ Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`s
 - `src/input/TouchManager.test.ts` — `PointerEvent` 発火でタップ位置・下スワイプの分類、閾値カスタム、2 本目無視、`pointercancel` を検証 (jsdom)。
 - `src/scenes/effects/BubbleParticleSystem.test.ts` — `emitBubbles` での生成数、`update` の上昇移動、寿命到達での自動削除、`destroy()` のクリア (jsdom + 決定論的 RNG)。`kind: 'clear'` (#19) は `'land'` より上昇速度が遅いこと、速度レンジが -25..-45 px/s、寿命レンジが 1500..2500ms に収まることを検証。
 - `src/scenes/effects/WaterSurface.test.ts` — `splash` での登録、500ms 経過後の自動削除、複数 splash の独立寿命 (jsdom + 手動クロック)。
+- `src/scenes/SceneManager.test.ts` — `cubicInOut` 単体 (境界 / 単調性)、`navigateTo` の即時スナップ (duration=0)、tween 中点・終端、進行中の navigateTo 切り替え、`applyCamera` の world 座標を検証。
+- `src/scenes/TitleScene.test.ts` — `attachInputs(KeyboardManager)` 経由で 1 / 2 / Escape / Enter が `onSelect('single' / 'versus' / 'exit' / 'single')` を発火することを検証 (jsdom)。
+- `src/scenes/ResultScene.test.ts` — R / Enter で `onRestart`、Escape で `onTitle` が呼ばれること、全 kind (cleared/gameover/win/lose) でコンストラクタが通ること、unsubscribe 後はキーが無効になることを検証 (jsdom)。
 
 ```bash
 npm test          # 1 回実行
@@ -364,6 +373,94 @@ DESIGN.md セクション 2 (Block Colors) を `BlockValue` 1..7 にマッピン
 
 ボード枠線は `UI_PRIMARY` (`#7c3aed`, Violet) で `alignment: 1` (内側) を指定する。ブロック上の数字テキストは `UI_TEXT_PRIMARY` (`#ffffff`) + Inter 700 (Google Fonts、`index.html` で読み込み)。
 
+## シーン構成 (Issue #21)
+
+タイトル / シングル / 対戦 / リザルトの 4 シーンを、**1 枚の巨大「宇宙誌面」コンテナ (= `SceneManager.world`)** の中に絶対座標で配置する。カメラを 4 シーン間で `cubicInOut` の tween 補間して移動し、「宇宙に浮かぶページをパン&ズームする」演出を実現する。
+
+### 誌面上のシーン配置 (`main.ts`)
+
+| シーン | 誌面ローカル (x, y) | scale | コンポーネント                                                   |
+| ------ | ------------------- | ----- | ---------------------------------------------------------------- |
+| title  | (400, 325)          | 1.0   | `TitleScene` (ロゴ + シングル/対戦/終了の 3 ボタン)              |
+| single | (1500, 325)         | 1.0   | `GameScene.board` (シングル用 `PlayerBoard`)                     |
+| versus | (2700, 325)         | 1.0   | `VersusScene` (2 つの `PlayerBoard` を横並び)                    |
+| result | (2000, 1200)        | 1.0   | `ResultScene` (cleared/gameover/win/lose に応じた見出し + score) |
+
+座標は誌面ローカル (= world Container の子としての位置)。`SceneManager(VIEW_W, VIEW_H)` がカメラ中心 → ビューポート中心への変換 (`world.x/y/scale`) を担う。
+
+### `SceneManager`
+
+```ts
+class SceneManager {
+  readonly world: Container
+  registerScene(key, transform): void
+  navigateTo(key, durationMs = 1000): Promise<void> // cubicInOut tween
+  update(deltaMS): void // Ticker から呼ぶ
+}
+```
+
+- 進行中の tween 中に別の `navigateTo` を呼ぶと、**現在のカメラ位置から** 新しい目的地へ繋ぎ直す (= 折り返しできる)。
+- 自前 `cubicInOut` で十分な絵が出るので GSAP 等の重い tween ライブラリは導入しない。
+- `update(deltaMS)` は Ticker 1 個に統一する設計 (`main.ts` で `SceneManager.update` → `GameScene.update` → `VersusScene.update` の順で 1 ループを回す)。
+
+### 入力フォワーディング
+
+`KeyboardManager` / `TouchManager` は **アプリ全体で 1 個** を `window` / `canvas` に attach。
+「今アクティブなシーン」だけがコマンドを購読する設計で、`main.setActiveScene(key)` が前の購読を `unsubscribe()` → 新しいシーンの `attachInputs(keyboard, touch?)` を呼ぶ。
+
+シーン別マッピング (本 Issue 時点):
+
+| シーン | キー               | 動作                                                       |
+| ------ | ------------------ | ---------------------------------------------------------- |
+| Title  | `1`                | シングル開始 (= single へ navigate)                        |
+| Title  | `2`                | 対戦開始 (= versus へ navigate)                            |
+| Title  | `Escape` / `Enter` | 終了 (ブラウザでは no-op) / シングル開始                   |
+| Single | `← → ↓ P R`        | 既存の GameScene と同じ。タッチも有効                      |
+| Single | (cleared/gameover) | ResultScene へ自動遷移                                     |
+| Versus | `← → ↓`            | P1 のみ操作可。P2 は本 Issue では待機                      |
+| Result | `R` / `Enter`      | onRestart (シングルなら startSingle、対戦なら startVersus) |
+| Result | `Escape`           | onTitle (タイトルへ navigate)                              |
+
+`KeyboardCommand` に Issue #21 で `select1` / `select2` / `cancel` / `confirm` を追加。
+タイトル/リザルトの選択や戻る操作に使う。
+
+## 対戦モード (Issue #21)
+
+`VersusScene` は 2 個の `PlayerBoard` を横並びに配置する。両プレイヤーは独立した `GameState` (= 同じお題から `buildGameStateFromPuzzle` を 2 回呼ぶ) を持ち、物理・連鎖・スポーンを並行に進める。
+
+### お邪魔ブロック送信 (MVP)
+
+```
+PlayerBoard.startChainSequence
+  └─ runChain({ onClear: positions => {
+         emitClearBubbles(positions)
+         pendingGarbageOut += floor(positions.size / 3)
+         callbacks.onChain(cleared, chainLevel)
+     }})
+VersusScene.transferGarbage(from, to)  ← onChain で呼ばれる
+  └─ to.garbageReceived(from.consumePendingGarbage())
+
+PlayerBoard.garbageReceived(count)
+  └─ 上から null セルを探して 1..6 のランダムブロックを最大 count 個埋める
+```
+
+- レート: 連鎖 1 段の消去数の `floor(N / 3)` を相手に送る (= 3 個消すごとに 1 個降る)。
+- 送信タイミング: `onChain` フックは連鎖の各段で呼ばれるので、連鎖中じわじわ相手に降っていく絵になる。
+- 内容: 1..6 のランダム (= ターゲット `7` は送らない。テンポを崩さないため)。
+- 受信側が `playing` 以外 / 連鎖中なら受け取りを破棄する (= バランス調整は後続課題)。
+
+### 勝敗判定
+
+- `cleared` (= 残 7 が 0): **その側の勝ち** (先に消し切った方の勝利)。
+- `gameover` (= スポーン位置に既にブロックがある): **相手の勝ち**。
+- どちらかが確定したら `settled = true` で以後のコールバックを抑止する。
+
+### 本 Issue ではやらないこと
+
+- P2 のキーバインド (現状はキーボード ← → ↓ が P1 のみに割り当て。WASD 等は別 Issue)。
+- 連鎖段数に応じた送信量の重み付け (今は単純な `floor(N/3)`)。
+- 連鎖カウント表示・対戦専用 UI (P1/P2 のスコアパネル等)。
+
 ## 後続 Issue で構築予定
 
 - `#13` GameState 型定義と `initWithState` 実装
@@ -374,5 +471,5 @@ DESIGN.md セクション 2 (Block Colors) を `BlockValue` 1..7 にマッピン
 - `#18` ブロック消去・連鎖ロジック (Promise チェーン)
 - `#19` 水中爆発エフェクト
 - `#20` キーボード・タッチ入力
-- `#21` TitleScene / VersusScene
+- `#21` TitleScene / VersusScene / シーン遷移 (実装済)
 - `#22` 音実装
