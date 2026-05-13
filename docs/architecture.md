@@ -7,6 +7,7 @@
 > Issue #15 で `BoardRenderer` によるボード・ブロック描画を追加した。
 > Issue #16 で水中物理 (`UnderwaterPhysics`) を追加した。
 > Issue #18 で消去・連鎖ロジック (`src/game/`) と Vitest を追加した。
+> Issue #20 でキーボード・タッチ入力 (`src/input/`) と一時停止・リスタートを追加した。
 
 ## 技術スタック
 
@@ -35,10 +36,14 @@ src/
 │   └── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画
 ├── physics/
 │   └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
-└── game/
-    ├── board.ts            # 着地計算 / ブロック固定 / 消去判定 / 重力 / 7 個数集計
-    ├── ChainRunner.ts      # 着水後の消去・重力・再判定を Promise チェーンで実行
-    └── randomBlocks.ts     # 1〜7 のブロック生成 (7 は 2%、1〜6 は残り 98% を等分)
+├── game/
+│   ├── board.ts            # 着地計算 / ブロック固定 / 消去判定 / 重力 / 7 個数集計 / 横移動衝突判定
+│   ├── ChainRunner.ts      # 着水後の消去・重力・再判定を Promise チェーンで実行
+│   └── randomBlocks.ts     # 1〜7 のブロック生成 (7 は 2%、1〜6 は残り 98% を等分)
+└── input/                  # Issue #20
+    ├── KeyboardManager.ts  # キーマップ → KeyboardCommand へ変換、handler に通知
+    ├── TouchManager.ts     # PointerEvent → TouchCommand (左/右タップ・下スワイプ) 分類
+    └── constants.ts        # DROP_BOOST_VELOCITY 等の入力解釈用定数
 index.html                  # <div id="root"></div> に canvas をマウント (+ Inter Web フォント読込)
 ```
 
@@ -70,22 +75,24 @@ index.html                  # <div id="root"></div> に canvas をマウント (
   "version": 1,
   "puzzles": [
     {
-      "id": "tutorial-01",        // 一意の識別子
-      "title": "初級",             // 表示名
-      "cols": 5,                   // 列数 (現状は 5 想定)
-      "rows": 10,                  // 行数 (現状は 10 想定)
-      "board": [                   // 行配列、長さは rows、各行は cols 文字
-        ".....",                   //   "." = 空セル
-        ".....",                   //   "1"〜"7" = ブロック値
-        "..1..",                   // 行順は JSON の 0 行目 = 最上段、最後の行 = 最下段
-        "..."
+      "id": "tutorial-01", // 一意の識別子
+      "title": "初級", // 表示名
+      "cols": 5, // 列数 (現状は 5 想定)
+      "rows": 10, // 行数 (現状は 10 想定)
+      "board": [
+        // 行配列、長さは rows、各行は cols 文字
+        ".....", //   "." = 空セル
+        ".....", //   "1"〜"7" = ブロック値
+        "..1..", // 行順は JSON の 0 行目 = 最上段、最後の行 = 最下段
+        "...",
       ],
-      "nextBlocks": [3, 4, 2],     // 任意。最初に降ってくるブロックのキュー
-      "targetBlocks": [             // 任意。クリアに必要な 7 ブロックの位置 (情報用途)
-        { "row": 8, "col": 2 }     //   row / col は GameState 座標 (0 = 最上段)
-      ]
-    }
-  ]
+      "nextBlocks": [3, 4, 2], // 任意。最初に降ってくるブロックのキュー
+      "targetBlocks": [
+        // 任意。クリアに必要な 7 ブロックの位置 (情報用途)
+        { "row": 8, "col": 2 }, //   row / col は GameState 座標 (0 = 最上段)
+      ],
+    },
+  ],
 }
 ```
 
@@ -137,12 +144,12 @@ npm run format    # Prettier
 a = WATER_GRAVITY - WATER_BUOYANCY - WATER_DRAG * velocity
 ```
 
-| 定数 | 値 | 単位 | 役割 |
-|---|---|---|---|
-| `WATER_GRAVITY` | `18.0` | row/s² | 下向き重力加速度。通常重力より弱め |
-| `WATER_BUOYANCY` | `6.0` | row/s² | 上向き浮力。重力の約 1/3 なのでブロックは沈む |
-| `WATER_DRAG` | `1.6` | 1/s | 粘性抵抗係数 (速度比例)。終端速度を決める |
-| `MAX_VELOCITY` | `12.0` | row/s | 終端速度の安全上限 (パラメータ調整・dt スパイク防御) |
+| 定数             | 値     | 単位   | 役割                                                 |
+| ---------------- | ------ | ------ | ---------------------------------------------------- |
+| `WATER_GRAVITY`  | `18.0` | row/s² | 下向き重力加速度。通常重力より弱め                   |
+| `WATER_BUOYANCY` | `6.0`  | row/s² | 上向き浮力。重力の約 1/3 なのでブロックは沈む        |
+| `WATER_DRAG`     | `1.6`  | 1/s    | 粘性抵抗係数 (速度比例)。終端速度を決める            |
+| `MAX_VELOCITY`   | `12.0` | row/s  | 終端速度の安全上限 (パラメータ調整・dt スパイク防御) |
 
 積分は semi-implicit Euler (`v` を先に更新してから `row` を更新)。`deltaMS` は内部で `50ms` にクランプし、タブ非アクティブ復帰時の位置ジャンプを防ぐ。
 
@@ -204,34 +211,82 @@ a = WATER_GRAVITY - WATER_BUOYANCY - WATER_DRAG * velocity
 
 旧仕様 (1〜6 各 17%、7 が 2%) は合計 104% で歪なため、本実装では「7 を 2% で抜き出し、残り 98% を 1〜6 で等分」する形に正規化。RNG は引数で差し替え可能で、テスト時に決定論的に検証できる。
 
-## テスト (Issue #18)
+## 入力 (Issue #20)
 
-Vitest を導入した (Node 環境)。テスト対象は `src/game/` の純粋関数群が中心:
+親 Issue #10 のタッチ方針 (kako-jun 明示): **バーチャルパッドは採用しない**。画面エリアに意味を持たせる。
 
-- `src/game/board.test.ts` — 消去判定の各パターン (1+2+4, 2+5, 7+7+7 は消える / 7+7 は消えない, 縦横同時, 単独 7 は消えない 等)、`findLandingRow`、`lockFallingBlock`、`applyGravity`、`clearCells`、`countSevens`。
+### キーボード (`KeyboardManager`)
+
+| キー      | コマンド      | 効果                                                                                              |
+| --------- | ------------- | ------------------------------------------------------------------------------------------------- |
+| `←`       | `left`        | `fallingBlock.col` を -1 (境界 + 衝突チェック後)                                                  |
+| `→`       | `right`       | `fallingBlock.col` を +1 (同上)                                                                   |
+| `↓`       | `drop`        | `fallingBlock.velocity` に `DROP_BOOST_VELOCITY` を加算 (高速落下、`MAX_VELOCITY` で終端クランプ) |
+| `P` / `p` | `togglePause` | `playing` ↔ `paused` を切替 (`cleared` / `gameover` では無視)                                     |
+| `R` / `r` | `restart`     | `RestartSource.build()` で現在のお題を再構築して `initWithState`                                  |
+
+未対応キーは `preventDefault` せずスルー。長押し連発は OS のオートリピートに任せる (`↓` 押しっぱなしで連続加速)。
+
+### タッチ (`TouchManager`)
+
+`PointerEvent` を購読し、touchstart / mousedown を統一して扱う。
+
+| ジェスチャ                                   | コマンド |
+| -------------------------------------------- | -------- |
+| canvas 左半分 (x < width/2) をタップ         | `left`   |
+| canvas 右半分をタップ                        | `right`  |
+| 下スワイプ (dy >= 50px かつ \|dy\| > \|dx\|) | `drop`   |
+
+- 中央 (x = width/2 ちょうど) は右扱い。
+- 上スワイプ・横スワイプ・スワイプ未満の微動はタップ扱いに倒れ、開始 x で左右判定。
+- 2 本目以降のポインタは無視 (`active` で 1 本のみ追跡)。`pointercancel` で追跡解除。
+- スワイプ閾値は `TouchManagerOptions.swipeThresholdPx` で差し替え可能 (既定 50px)。
+
+### 入力封じ (`GameScene` で集中管理)
+
+各 Manager は「コマンド発火」までを担当し、ゲーム状態は参照しない。封じロジックは `GameScene.handleKeyboard` / `handleTouch` に集約:
+
+- `state.status !== 'playing'` (= `paused` / `cleared` / `gameover`) のとき: `left` / `right` / `drop` を無視
+- `isChaining = true` のとき: `left` / `right` / `drop` を無視
+- `togglePause`: `playing` ↔ `paused` のみ。`cleared` / `gameover` (終端状態) では無視
+- `restart`: 常時有効 (`cleared` / `gameover` からの復帰に必要)。`setRestartSource()` 未設定なら no-op
+
+### リスタートソース (`RestartSource`)
+
+`GameScene.setRestartSource({ build(): GameState | null })` で注入する。`main.ts` では `PuzzleRotation.current()` + `buildGameStateFromPuzzle` を `build` に渡す。タイトル画面 (#21) 実装時は別ソースに差し替えることで「タイトルへ戻る」も同じ仕組みで作れる。
+
+## テスト (Issue #18 / #20)
+
+Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**` のみ jsdom\*\*、それ以外は Node 環境で動かす。
+
+テスト対象:
+
+- `src/game/board.test.ts` — 消去判定の各パターン (1+2+4, 2+5, 7+7+7 は消える / 7+7 は消えない, 縦横同時, 単独 7 は消えない 等)、`findLandingRow`、`lockFallingBlock`、`applyGravity`、`clearCells`、`countSevens`、`canMoveFallingTo` (境界・衝突・浮動小数 row)。
 - `src/game/randomBlocks.test.ts` — 境界値検証 + 100,000 試行で 7 の出現率が 2% に収束することを確認。
 - `src/game/ChainRunner.test.ts` — 単発消去、重力経由の 2 連鎖、7+7+7 + 重力後の連続消去、消去 0 件で即終了。`stepDelayMs: 0` で実時間 wait を除去。
+- `src/input/KeyboardManager.test.ts` — `KeyboardEvent` 発火でキー → コマンド変換、`preventDefault`、unsubscribe、attach 重複防御を検証 (jsdom)。
+- `src/input/TouchManager.test.ts` — `PointerEvent` 発火でタップ位置・下スワイプの分類、閾値カスタム、2 本目無視、`pointercancel` を検証 (jsdom)。
 
 ```bash
 npm test          # 1 回実行
 npm run test:watch # ファイル変更で再実行
 ```
 
-`PixiJS` を含む `src/scenes/` のテストは jsdom が必要なため本 Issue ではスコープ外 (後続 Issue で必要が出たら追加)。
+`PixiJS` を含む `src/scenes/` のテストは jsdom + PIXI のモックが必要なため本 Issue ではスコープ外 (後続 Issue で必要が出たら追加)。
 
 ## カラーマッピング
 
 DESIGN.md セクション 2 (Block Colors) を `BlockValue` 1..7 にマッピングしたもの (`src/constants/colors.ts`)。Hex 値は DESIGN.md と完全一致させる。7 はクリア対象ブロックなので、もっとも目立つ Magenta を割り当てている。
 
-| BlockValue | DESIGN.md カラー名 | Hex |
-|---|---|---|
-| 1 | Rose    | `#ff6b9d` |
-| 2 | Coral   | `#ffa06b` |
-| 3 | Gold    | `#ffd93d` |
-| 4 | Mint    | `#6bffb8` |
-| 5 | Sky     | `#6bb3ff` |
-| 6 | Purple  | `#a06bff` |
-| 7 | Magenta | `#ff6bff` |
+| BlockValue | DESIGN.md カラー名 | Hex       |
+| ---------- | ------------------ | --------- |
+| 1          | Rose               | `#ff6b9d` |
+| 2          | Coral              | `#ffa06b` |
+| 3          | Gold               | `#ffd93d` |
+| 4          | Mint               | `#6bffb8` |
+| 5          | Sky                | `#6bb3ff` |
+| 6          | Purple             | `#a06bff` |
+| 7          | Magenta            | `#ff6bff` |
 
 ボード枠線は `UI_PRIMARY` (`#7c3aed`, Violet) で `alignment: 1` (内側) を指定する。ブロック上の数字テキストは `UI_TEXT_PRIMARY` (`#ffffff`) + Inter 700 (Google Fonts、`index.html` で読み込み)。
 
