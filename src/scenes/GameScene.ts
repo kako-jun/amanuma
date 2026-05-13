@@ -1,10 +1,8 @@
 import type { Application, Ticker } from 'pixi.js'
 import { Container } from 'pixi.js'
 import type { GameState } from '../types/GameState'
+import { CELL_SIZE } from '../constants/colors'
 import { BoardRenderer } from './BoardRenderer'
-
-/** BoardRenderer のセルサイズ (DESIGN.md の cell pixel)。 */
-const CELL_SIZE = 48
 
 /**
  * ゲーム本編シーン。

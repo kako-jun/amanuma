@@ -40,3 +40,13 @@ export const UI_SECONDARY = 0x06b6d4
 
 /** 本文・ブロック上の数字テキストに使う白 (`text-primary`)。 */
 export const UI_TEXT_PRIMARY = 0xffffff
+
+/**
+ * 描画レイアウト定数。
+ *
+ * DESIGN.md セクション 4 (Game Canvas) の border 2px を遵守する。
+ * Issue #15 時点の固定値。物理 (#16) やシーン (#21) でも参照する。
+ */
+export const CELL_SIZE = 48
+export const BOARD_BORDER_WIDTH = 2
+export const BOARD_BG_ALPHA = 0.25

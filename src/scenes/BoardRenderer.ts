@@ -17,8 +17,15 @@
  */
 
 import { Container, Graphics, Text } from 'pixi.js'
-import type { GameState } from '../types/GameState'
-import { BLOCK_COLORS, UI_PRIMARY, UI_TEXT_PRIMARY } from '../constants/colors'
+import type { BlockValue, GameState } from '../types/GameState'
+import {
+  BLOCK_COLORS,
+  BOARD_BG_ALPHA,
+  BOARD_BORDER_WIDTH,
+  CELL_SIZE,
+  UI_PRIMARY,
+  UI_TEXT_PRIMARY,
+} from '../constants/colors'
 
 export interface BoardRendererOptions {
   /** 1 セルのピクセルサイズ */
@@ -28,8 +35,8 @@ export interface BoardRendererOptions {
 }
 
 const DEFAULT_OPTIONS: BoardRendererOptions = {
-  cellSize: 48,
-  borderWidth: 2,
+  cellSize: CELL_SIZE,
+  borderWidth: BOARD_BORDER_WIDTH,
 }
 
 export class BoardRenderer extends Container {
@@ -86,7 +93,7 @@ export class BoardRenderer extends Container {
     // 背景はあってもなくても良いが、ブロックがない空セルが背景色と
     // 完全に一致して「枠線だけが浮いて見える」のを避けるために置く。
     g.rect(0, 0, boardWidth, boardHeight)
-      .fill({ color: 0x000000, alpha: 0.25 })
+      .fill({ color: 0x000000, alpha: BOARD_BG_ALPHA })
       .stroke({ color: UI_PRIMARY, width: borderWidth, alignment: 1 })
 
     // 描画したテキストインデックス。残りは visible=false で隠す。
@@ -124,13 +131,11 @@ export class BoardRenderer extends Container {
   private drawBlock(
     x: number,
     y: number,
-    value: number,
+    value: BlockValue,
     textIndex: number
   ): void {
     const { cellSize } = this.options
-    const color = BLOCK_COLORS[value as 1 | 2 | 3 | 4 | 5 | 6 | 7]
-    // 念のため: 未知の値が混入したら描画しない (型上は来ないはず)。
-    if (color === undefined) return
+    const color = BLOCK_COLORS[value]
 
     // ブロック本体。セル境界から内側に 2px 余白を取って、隣接ブロック同士の
     // 境界が DESIGN.md の「マスの粒立ち」を保てるようにする。
