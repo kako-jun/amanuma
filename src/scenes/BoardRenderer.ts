@@ -217,15 +217,31 @@ export class BoardRenderer extends Container {
     // 境界が DESIGN.md の「マスの粒立ち」を保てるようにする。
     const pad = 2
     const radius = 6
+    const innerSize = cellSize - pad * 2
+    this.graphics
+      .roundRect(x + pad, y + pad, innerSize, innerSize, radius)
+      .fill({ color })
+
+    // 斜光ライティング (Issue #31)。左上から光源が当たっている想定で:
+    //   - 全体に薄い白ハイライト (ガラス越しの光の散乱)
+    //   - 上半分に追加の白ハイライト (上面が明るい)
+    //   - 下半分に薄い黒の影 (下面が暗い)
+    // DESIGN.md の Block Colors を変えずに、alpha を控えめにして識別性を保つ。
+    this.graphics
+      .roundRect(x + pad, y + pad, innerSize, innerSize, radius)
+      .fill({ color: 0xffffff, alpha: 0.08 })
+    this.graphics
+      .roundRect(x + pad, y + pad, innerSize, innerSize / 2, radius)
+      .fill({ color: 0xffffff, alpha: 0.1 })
     this.graphics
       .roundRect(
         x + pad,
-        y + pad,
-        cellSize - pad * 2,
-        cellSize - pad * 2,
+        y + pad + innerSize / 2,
+        innerSize,
+        innerSize / 2,
         radius
       )
-      .fill({ color })
+      .fill({ color: 0x000000, alpha: 0.18 })
 
     // 数字テキスト (中央寄せ)。
     const text = this.textPool[textIndex]

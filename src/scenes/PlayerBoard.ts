@@ -26,6 +26,7 @@ import { Container } from 'pixi.js'
 import type { GameState } from '../types/GameState'
 import { CELL_SIZE } from '../constants/colors'
 import { BoardRenderer } from './BoardRenderer'
+import { BeakerFrame } from './effects/BeakerFrame'
 import { BubbleParticleSystem } from './effects/BubbleParticleSystem'
 import { WaterSurface } from './effects/WaterSurface'
 import { stepUnderwaterPhysics } from '../physics/UnderwaterPhysics'
@@ -68,6 +69,7 @@ export class PlayerBoard extends Container {
   private renderer: BoardRenderer | null = null
   private water: WaterSurface | null = null
   private bubbles: BubbleParticleSystem | null = null
+  private beaker: BeakerFrame | null = null
   private isChaining: boolean = false
   /** 連鎖中に「あとで送るお邪魔」のキュー。対戦時に相手に伝えるための一時バッファ。 */
   private pendingGarbageOut: number = 0
@@ -109,9 +111,27 @@ export class PlayerBoard extends Container {
       this.bubbles.destroy({ children: true })
       this.bubbles = null
     }
+    if (this.beaker) {
+      this.beaker.destroy({ children: true })
+      this.beaker = null
+    }
+
+    const boardWidthPx = state.cols * CELL_SIZE
+    const boardHeightPx = state.rows * CELL_SIZE
+
+    // ビーカー (Issue #31)。盤面の前後にレイヤーを挟むため、
+    // back → 盤面 → 水面 → 泡 → front の順で addChild する。
+    const beaker = new BeakerFrame({
+      boardWidth: boardWidthPx,
+      boardHeight: boardHeightPx,
+    })
+    const beakerBack = beaker.getBackLayer()
+    beakerBack.x = 0
+    beakerBack.y = 0
+    this.addChild(beakerBack)
+    this.beaker = beaker
 
     const renderer = new BoardRenderer(state, { cellSize: CELL_SIZE })
-    const boardWidthPx = state.cols * CELL_SIZE
     // 盤面の左上 (0,0) に置く。配置 (中央寄せなど) は外部の親 Container に任せる。
     renderer.x = 0
     renderer.y = 0
@@ -129,6 +149,12 @@ export class PlayerBoard extends Container {
     bubbles.y = 0
     this.addChild(bubbles)
     this.bubbles = bubbles
+
+    // ガラスの輪郭・ハイライトは最前面に。盤面・水面・泡の上に乗せる。
+    const beakerFront = beaker.getFrontLayer()
+    beakerFront.x = 0
+    beakerFront.y = 0
+    this.addChild(beakerFront)
 
     if (state.fallingBlock !== null) {
       this.emitSpawnEffect(state.fallingBlock.col)
@@ -381,5 +407,6 @@ export class PlayerBoard extends Container {
     this.renderer = null
     this.water = null
     this.bubbles = null
+    this.beaker = null
   }
 }

@@ -51,6 +51,20 @@ const LINE_WIDTH_PX = 1.5
 /** ラインの不透明度 (0..1)。 */
 const LINE_ALPHA = 0.6
 
+/**
+ * 水面の光の筋 (Issue #31)。
+ *
+ * 斜光が水面に当たって反射するハイライト。波紋とは別に常駐し、
+ * 横方向にゆっくり振動しながら水面に光の線として乗る。
+ */
+const GLINT_COLOR = 0xffffff
+const GLINT_ALPHA = 0.35
+const GLINT_HEIGHT_PX = 1.2
+/** 筋の長さ (widthPx に対する比率)。 */
+const GLINT_LENGTH_RATIO = 0.3
+/** 横振動の周期 (秒)。 */
+const GLINT_OSCILLATION_PERIOD_SEC = 6
+
 /** 時刻ソース。テストで差し替え可能 (既定 `performance.now`)。 */
 export type NowSource = () => number
 
@@ -137,6 +151,20 @@ export class WaterSurface extends Container {
       color: UI_SECONDARY,
       alpha: LINE_ALPHA,
       width: LINE_WIDTH_PX,
+    })
+
+    // 水面の光の筋 (Issue #31)。
+    // 横方向にゆっくり振動する白いライン。斜光の水面反射を表現する。
+    // sin で -1..1 を取り、widthPx 内に収まるように中央位置を計算。
+    const glintLength = this.widthPx * GLINT_LENGTH_RATIO
+    const glintTravelRange = this.widthPx - glintLength
+    const glintCenter =
+      (Math.sin((tSec / GLINT_OSCILLATION_PERIOD_SEC) * 2 * Math.PI) * 0.5 +
+        0.5) *
+      glintTravelRange
+    g.rect(glintCenter, -GLINT_HEIGHT_PX, glintLength, GLINT_HEIGHT_PX).fill({
+      color: GLINT_COLOR,
+      alpha: GLINT_ALPHA,
     })
   }
 }
