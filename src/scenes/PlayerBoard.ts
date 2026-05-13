@@ -235,12 +235,12 @@ export class PlayerBoard extends Container {
 
     this.isChaining = true
     void runChain(state, {
-      onClear: positions => {
+      // S13: ChainRunner が chainLevel (increment 後の値) を渡してくれる。
+      // 旧実装の `state.chainCount + 1` 推定 (clearCells 前は chainCount が未更新)
+      // は脆かったため、引数で受け取る方式に統一。
+      onClear: (positions, chainLevel) => {
         this.emitClearBubbles(positions)
         const cleared = positions.size
-        const chainLevel = state.chainCount + 1
-        // chainCount は runChain 内で更新されるが、onClear は clearCells の直前。
-        // chainLevel を独自に推定するのは難しいので chainCount を使う近似に留める。
         this.callbacks.onChain?.(cleared, chainLevel)
         // お邪魔送信 MVP: floor(clearedCount / 3)。
         this.pendingGarbageOut += Math.floor(cleared / 3)

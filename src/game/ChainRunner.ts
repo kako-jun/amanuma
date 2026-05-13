@@ -30,13 +30,19 @@ export interface RunChainOptions {
   /**
    * 消去が発生する直前 (= clearCells 呼び出しの直前) に呼ばれるコールバック。
    *
-   * 引数は消去対象セル位置の `Set<row * cols + col>` (= board の通り `findClearablePositions`
-   * が返したそのもの)。GameScene 側で各位置に水中爆発エフェクト (Issue #19) を発火するための
-   * 通知フック。コールバック内で state を破壊的に変更してはいけない (描画系の発火専用)。
+   * 引数:
+   * - `positions`: 消去対象セル位置の `Set<row * cols + col>` (= board の通り
+   *   `findClearablePositions` が返したそのもの)。
+   * - `chainLevel`: 現在の連鎖段 (1 始まり、increment 後の値)。1 段目 = 単発、
+   *   2 段目以降 = 連鎖。S13 で追加 (呼出側で `state.chainCount + 1` を推定する
+   *   脆い実装を避けるため)。
+   *
+   * GameScene 側で各位置に水中爆発エフェクト (Issue #19) を発火するための通知フック。
+   * コールバック内で state を破壊的に変更してはいけない (描画系の発火専用)。
    *
    * 何も消去がないステップ (ループ終了条件) では呼ばれない。
    */
-  onClear?: (positions: Set<number>) => void
+  onClear?: (positions: Set<number>, chainLevel: number) => void
 }
 
 function delay(ms: number): Promise<void> {
@@ -76,7 +82,8 @@ export async function runChain(
 
     // 消去直前に通知フック (#19): GameScene 側で位置情報を元に泡を発火する。
     // clearCells 後だと位置情報が失われるので必ずここで呼ぶ。
-    opts.onClear?.(positions)
+    // S13: chainLevel (increment 後の値 = 「現在の連鎖段」) も引数で渡す。
+    opts.onClear?.(positions, chainLevel)
 
     const cleared = clearCells(state, positions)
     totalClears += cleared
