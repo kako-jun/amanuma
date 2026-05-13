@@ -38,6 +38,7 @@ import {
 import { runChain } from '../game/ChainRunner'
 import { generateBlockValue } from '../game/randomBlocks'
 import { DROP_BOOST_VELOCITY } from '../input/constants'
+import type { SoundManager } from '../audio/SoundManager'
 
 export interface PlayerBoardCallbacks {
   /**
@@ -71,8 +72,23 @@ export class PlayerBoard extends Container {
   /** 連鎖中に「あとで送るお邪魔」のキュー。対戦時に相手に伝えるための一時バッファ。 */
   private pendingGarbageOut: number = 0
 
-  constructor(private readonly callbacks: PlayerBoardCallbacks = {}) {
+  /**
+   * 音マネージャ (Issue #22)。任意注入。null の場合は音呼出を完全にスキップする。
+   * テストや音不要のモードで PlayerBoard を使うために optional にしている。
+   */
+  private soundManager: SoundManager | null
+
+  constructor(
+    private readonly callbacks: PlayerBoardCallbacks = {},
+    soundManager: SoundManager | null = null
+  ) {
     super()
+    this.soundManager = soundManager
+  }
+
+  /** SoundManager を後から差し替える。null で音呼出を無効化。 */
+  setSoundManager(sm: SoundManager | null): void {
+    this.soundManager = sm
   }
 
   /** 任意の GameState で (再) 初期化する。 */
@@ -192,6 +208,11 @@ export class PlayerBoard extends Container {
         this.callbacks.onChain?.(cleared, chainLevel)
         // お邪魔送信 MVP: floor(clearedCount / 3)。
         this.pendingGarbageOut += Math.floor(cleared / 3)
+        // 音 (Issue #22):
+        //   - 各消去ステップで block-clear。
+        //   - 2 連鎖目以降は chain-up を重ねる (盛り上げ用)。
+        this.soundManager?.playSfx('block-clear')
+        if (chainLevel >= 2) this.soundManager?.playSfx('chain-up')
       },
     }).then(() => {
       if (this.state !== state) {
@@ -202,6 +223,7 @@ export class PlayerBoard extends Container {
       if (countSevens(state) === 0) {
         state.status = 'cleared'
         this.isChaining = false
+        this.soundManager?.playSfx('puzzle-cleared')
         this.callbacks.onCleared?.()
         return
       }
@@ -211,6 +233,7 @@ export class PlayerBoard extends Container {
       if (state.board[0][spawnCol] !== null) {
         state.status = 'gameover'
         this.isChaining = false
+        this.soundManager?.playSfx('game-over')
         this.callbacks.onGameOver?.()
         return
       }
@@ -320,6 +343,7 @@ export class PlayerBoard extends Container {
     const xPx = col * CELL_SIZE + CELL_SIZE / 2
     this.water?.splash(xPx, 0.7)
     this.bubbles?.emitBubbles({ x: xPx, y: 0, kind: 'spawn', count: 3 })
+    this.soundManager?.playSfx('block-spawn')
   }
 
   private emitClearBubbles(positions: Set<number>): void {
@@ -347,6 +371,7 @@ export class PlayerBoard extends Container {
     const landY = row * CELL_SIZE + CELL_SIZE / 2
     this.bubbles?.emitBubbles({ x: xPx, y: landY, kind: 'land', count: 4 })
     this.renderer?.shake(row, col)
+    this.soundManager?.playSfx('block-land')
   }
 
   /** PIXI の destroy をオーバーライドして state を解放する。 */

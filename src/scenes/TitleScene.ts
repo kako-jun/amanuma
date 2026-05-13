@@ -18,6 +18,7 @@
 import { Container, Graphics, Text } from 'pixi.js'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
 import { UI_PRIMARY, UI_SECONDARY, UI_TEXT_PRIMARY } from '../constants/colors'
+import type { SoundManager } from '../audio/SoundManager'
 
 export type TitleAction = 'single' | 'versus' | 'exit'
 
@@ -46,10 +47,15 @@ interface ButtonEntry {
 export class TitleScene extends Container {
   private readonly buttons: ButtonEntry[] = []
   private readonly onSelect: (action: TitleAction) => void
+  private readonly soundManager: SoundManager | null
 
-  constructor(onSelect: (action: TitleAction) => void) {
+  constructor(
+    onSelect: (action: TitleAction) => void,
+    soundManager: SoundManager | null = null
+  ) {
     super()
     this.onSelect = onSelect
+    this.soundManager = soundManager
 
     // ロゴ。
     const logo = new Text({
@@ -109,23 +115,29 @@ export class TitleScene extends Container {
     const handler = (cmd: KeyboardCommand): void => {
       switch (cmd) {
         case 'select1':
-          this.onSelect('single')
+          this.fireSelect('single')
           break
         case 'select2':
-          this.onSelect('versus')
+          this.fireSelect('versus')
           break
         case 'cancel':
-          this.onSelect('exit')
+          this.fireSelect('exit')
           break
         case 'confirm':
           // Enter / Space はデフォルトで「シングル」開始。
-          this.onSelect('single')
+          this.fireSelect('single')
           break
         default:
           break
       }
     }
     return keyboard.onCommand(handler)
+  }
+
+  /** 共通: ui-select 音 + 上位通知。 */
+  private fireSelect(action: TitleAction): void {
+    this.soundManager?.playSfx('ui-select')
+    this.onSelect(action)
   }
 
   // ----------------------------------------------------------------------
@@ -181,7 +193,7 @@ export class TitleScene extends Container {
       this.drawButton(entry)
     })
     g.on('pointertap', () => {
-      this.onSelect(entry.action)
+      this.fireSelect(entry.action)
     })
   }
 
