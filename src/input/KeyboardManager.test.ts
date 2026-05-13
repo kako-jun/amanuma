@@ -86,6 +86,12 @@ describe('KeyboardManager', () => {
     expect(received).toEqual(['confirm', 'confirm'])
   })
 
+  it('m / M → mute (Issue #22)', () => {
+    fire('m')
+    fire('M')
+    expect(received).toEqual(['mute', 'mute'])
+  })
+
   it('対応キーは preventDefault される', () => {
     const ev = fire('ArrowLeft')
     expect(ev.defaultPrevented).toBe(true)

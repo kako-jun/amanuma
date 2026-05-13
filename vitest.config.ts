@@ -18,6 +18,7 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['src/input/**/*.test.ts', 'jsdom'],
       ['src/scenes/**/*.test.ts', 'jsdom'],
+      ['src/audio/**/*.test.ts', 'jsdom'],
       ['src/**/*.test.ts', 'node'],
     ],
   },
