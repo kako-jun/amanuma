@@ -21,9 +21,11 @@ export interface ResultSceneOptions {
    * 任意の SoundManager 注入 (Issue #22)。
    * 注入があれば、表示時に kind に応じた SFX (`puzzle-cleared` / `game-over`) を
    * 鳴らし、ボタン操作時に `ui-select` を鳴らす。
-   * 注: PlayerBoard 側で先に `puzzle-cleared` / `game-over` を鳴らしているので
-   * ResultScene からは鳴らさない設計でも良いが、対戦結果 (win/lose) では
-   * PlayerBoard 経由の音が片方しか鳴らないため、ResultScene 側でも明示する。
+   *
+   * 注 (S8): シングル (`cleared` / `gameover`) では PlayerBoard 側で既に
+   * `puzzle-cleared` / `game-over` を鳴らしているため、ResultScene からは
+   * 鳴らさない (二重発火を防ぐ)。対戦 (`win` / `lose`) は VersusScene →
+   * ResultScene 遷移で初めて勝敗が確定するため、ResultScene 側でのみ鳴らす。
    */
   soundManager?: SoundManager | null
 }
@@ -69,16 +71,20 @@ export class ResultScene extends Container {
     this.opts = opts
     this.soundManager = opts.soundManager ?? null
 
-    // 表示と同時に kind 別 SFX (対戦の場合は PlayerBoard 経由の SFX とは別 trigger)。
+    // 表示と同時に kind 別 SFX。
+    // S8: シングル (cleared / gameover) は PlayerBoard で既に発火しているため、
+    // ResultScene からは対戦結果 (win / lose) のみ鳴らす (二重発火回避)。
     if (this.soundManager) {
       switch (opts.kind) {
-        case 'cleared':
         case 'win':
           this.soundManager.playSfx('puzzle-cleared')
           break
-        case 'gameover':
         case 'lose':
           this.soundManager.playSfx('game-over')
+          break
+        case 'cleared':
+        case 'gameover':
+          // PlayerBoard 側で発火済み。ここでは鳴らさない。
           break
       }
     }
