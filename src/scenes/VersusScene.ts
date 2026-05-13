@@ -26,7 +26,7 @@ import { Container, Text } from 'pixi.js'
 import { PlayerBoard } from './PlayerBoard'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
 import type { GameState } from '../types/GameState'
-import { UI_P1, UI_P2, UI_TEXT_PRIMARY } from '../constants/colors'
+import { UI_P1, UI_P2 } from '../constants/colors'
 import type { SoundManager } from '../audio/SoundManager'
 
 /** 2 つの盤面の間隔 (px)。 */
@@ -108,9 +108,6 @@ export class VersusScene extends Container {
     this.addChild(this.p1)
     this.addChild(this.p2)
 
-    // テキスト色は UI_TEXT_PRIMARY も参照可能だが、ここではプレイヤー色を直接指定。
-    // 未使用警告を防ぐ参照。
-    void UI_TEXT_PRIMARY
   }
 
   /**
