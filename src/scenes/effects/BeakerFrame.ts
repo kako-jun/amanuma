@@ -20,7 +20,7 @@
  * y: -lipHeightPx .. 0 がビーカーの口のリップ部分。
  */
 
-import { Container, Graphics } from 'pixi.js'
+import { Graphics } from 'pixi.js'
 import { UI_PRIMARY, UI_SECONDARY } from '../../constants/colors'
 
 export interface BeakerOptions {
@@ -68,18 +68,23 @@ const SHADOW_WIDTH_PX = 1.5
 /**
  * ビーカーシルエット。`back` / `front` の 2 つの Graphics を保持する。
  *
- * `Container` を継承しているが、`addChild` は内部で行わず、外部 (PlayerBoard)
- * が `getBackLayer()` / `getFrontLayer()` を取得して任意の親に挿入する。
- * これは BoardRenderer / WaterSurface / BubbleParticleSystem を間に挟む
- * ためのレイヤー順制御を呼び出し側に委ねるため。
+ * N20: 以前は `Container` を継承していたが、自身を表示木に挿入することはなく、
+ * `back` / `front` を **独立した Graphics として親 (PlayerBoard) が直接 addChild する**
+ * 設計だったため、Container 継承は無意味でかつ二重 destroy の罠を生んでいた。
+ * 本クラスは「2 枚の Graphics を生成・描画・破棄する純粋なホルダ」とし、
+ * PIXI の表示木からは独立させる (plain class)。
+ *
+ * BoardRenderer / WaterSurface / BubbleParticleSystem を間に挟むためのレイヤー順
+ * 制御は引き続き呼び出し側 (PlayerBoard) の責務。
  */
-export class BeakerFrame extends Container {
+export class BeakerFrame {
   private readonly back: Graphics
   private readonly front: Graphics
   private readonly opts: Required<BeakerOptions>
+  /** PIXI 互換の `children` プロパティ (内部木は持たないので常に空)。テスト後方互換用。 */
+  readonly children: ReadonlyArray<never> = []
 
   constructor(opts: BeakerOptions) {
-    super()
     this.opts = {
       boardWidth: opts.boardWidth,
       boardHeight: opts.boardHeight,
@@ -109,12 +114,18 @@ export class BeakerFrame extends Container {
     return this.opts
   }
 
-  override destroy(options?: Parameters<Container['destroy']>[0]): void {
-    // back / front は独立 Graphics として外部の親に addChild されているため、
-    // 個別に destroy する。super.destroy は本 Container 自身の解放のみ。
+  /**
+   * 2 枚の Graphics を destroy する (N20)。
+   *
+   * 旧 API (Container 派生時) は `destroy({ children: true })` の形で呼ばれていたが、
+   * plain class になった本実装では引数は無視する (互換のため受け取りだけする)。
+   * back / front は親 (PlayerBoard) の表示木から `removeChild` 相当で外れた後、
+   * 本メソッドで明示破棄する。
+   */
+  destroy(_options?: unknown): void {
+    void _options
     if (!this.back.destroyed) this.back.destroy()
     if (!this.front.destroyed) this.front.destroy()
-    super.destroy(options)
   }
 
   // ----------------------------------------------------------------------
