@@ -10,6 +10,7 @@
 > Issue #20 でキーボード・タッチ入力 (`src/input/`) と一時停止・リスタートを追加した。
 > Issue #17 で着水エフェクト (`src/scenes/effects/`) を追加した。
 > Issue #21 で `SceneManager` + `TitleScene` / `VersusScene` / `ResultScene` / `PlayerBoard` を追加し、誌面パン&ズーム演出を導入した。
+> Issue #31 で `BeakerFrame` を追加し、盤面をビーカー型ガラス容器のシルエットで囲み、斜光ライティング (上面ハイライト・下面影・水面の光の筋) を導入した。
 
 ## 技術スタック
 
@@ -41,9 +42,10 @@ src/
 │   ├── TitleScene.ts       # タイトル画面 (グラスボタン 3 種, Issue #21)
 │   ├── ResultScene.ts      # リザルト画面 (cleared/gameover/win/lose 表示, Issue #21)
 │   ├── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画 (shake API は Issue #17)
-│   └── effects/            # Issue #17
+│   └── effects/            # Issue #17 / #31
+│       ├── BeakerFrame.ts          # ビーカー (口広・底細台形) のガラス枠 + 水中の青み overlay (Issue #31)
 │       ├── BubbleParticleSystem.ts # 泡パーティクル (spawn/land/clear、#19 で共用予定)
-│       └── WaterSurface.ts # 水面の常駐 sin 波 + 局所波紋 (splash)
+│       └── WaterSurface.ts # 水面の常駐 sin 波 + 局所波紋 + 光の筋 (Issue #31)
 ├── physics/
 │   └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
 ├── game/
@@ -546,6 +548,55 @@ mute コマンドはシーン非依存で `main.ts` が直接購読する (画�
 - 実音アセットの制作 (kako 声 / シンセ / 録音)。
 - 連鎖段数に応じた `chain-up` のピッチ補正 (現状は同じ音を重ねる)。
 - 音量スライダー UI (現状はミュートのトグルのみ)。
+
+## ビーカーとライティング (Issue #31)
+
+amanuma の盤面は四角い枠ではなく、**ビーカー (理科実験用ガラス容器) の中で行う水中落ち物パズル**である。
+盤面 (BoardRenderer) の前後にレイヤーを挟むことで、ガラスの存在感と斜光を表現する。
+
+### レイヤー順 (奥 → 手前)
+
+`PlayerBoard.initWithState` 内で次の順に `addChild` する:
+
+1. `BeakerFrame.getBackLayer()` — 内部の薄い青 (Cyan) overlay (alpha ~0.10) + 上下の擬似 gradient
+2. `BoardRenderer` — 盤面のブロック (斜光ハイライト・影込み)
+3. `WaterSurface` — 水面の sin 波 + 局所波紋 + 光の筋
+4. `BubbleParticleSystem` — 泡パーティクル (spawn / land / clear)
+5. `BeakerFrame.getFrontLayer()` — ガラスの輪郭 + 口のリップ + 反射ハイライト + 影
+
+`BeakerFrame` は `Container` 派生だが内部に `back` / `front` を child として持たず、
+それぞれを `getBackLayer()` / `getFrontLayer()` 経由で取り出し、呼び出し側 (PlayerBoard) が
+レイヤー順を制御する。これにより BoardRenderer / WaterSurface / BubbleParticleSystem を
+back と front の間に自由に挟める。
+
+### ビーカー形状
+
+`BeakerOptions` で形状を調整できる:
+
+- 上辺 = `boardWidth`、下辺 = `boardWidth - taperPx * 2` の **口広・底細の台形**
+- 口部分 (`y < 0`): `lipExtensionPx` だけ盤面より外に張り出した「リップ」(注ぎ口の簡略表現) を `lipHeightPx` の高さで描画
+- 輪郭線色は `UI_PRIMARY` (Violet)、太さは 2 px
+
+デフォルト: `wallThickness=6`, `taperPx=6`, `lipExtensionPx=12`, `lipHeightPx=8`。
+
+### 斜光の方向 (左上から)
+
+光源は **左上から斜めに** 当たっている想定で統一する:
+
+- **ブロック (BoardRenderer)**: 上半分に薄い白ハイライト (alpha 0.10) + 全体に微弱な白ハイライト (0.08) + 下半分に薄い黒の影 (0.18)。DESIGN.md の Block Colors は変えず、alpha を控えめにして識別性を維持する
+- **ガラス (BeakerFrame.front)**: 右側面の **内側** に縦の白ハイライトライン (alpha 0.3、boardHeight の 60%)、左側面の内側に薄い黒影 (alpha 0.2)、リップ上面に薄い白ライン
+- **水面 (WaterSurface)**: 横方向にゆっくり振動する白の光の筋 (長さ = widthPx の 30%、周期 6 秒、alpha 0.35)。波紋とは別の常駐エフェクト
+
+### Block Colors との両立
+
+DESIGN.md の Block Colors はそのまま保つ。ライティングは **既存ブロックの上に半透明の重ね描き**
+として実装されているため、識別性 (DESIGN.md「dark background 上で互いに区別可能」) は維持される。
+ShaderFilter / displacement のような重い処理は本 Issue では使わず、Graphics の単純な重ねだけで構成する。
+
+### テスト
+
+- `BeakerFrame.test.ts`: コンストラクタ・getBackLayer/getFrontLayer・オプションのデフォルト・destroy 後の状態を検証
+- jsdom 環境では Graphics の描画自体は走らないが、ライフサイクルと API シグネチャは十分カバーできる
 
 ## 後続 Issue で構築予定
 
