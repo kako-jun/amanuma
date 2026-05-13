@@ -11,6 +11,10 @@
  *   ArrowDown  → 'drop'           (押すたびに 1 回通知、長押しの連続落下は呼び出し側が解釈)
  *   p / P      → 'togglePause'
  *   r / R      → 'restart'
+ *   1          → 'select1'        (Issue #21: タイトル画面で「シングル」)
+ *   2          → 'select2'        (Issue #21: タイトル画面で「対戦」)
+ *   Escape     → 'cancel'         (Issue #21: タイトル/リザルトで「キャンセル / タイトルへ」)
+ *   Enter / 空白 → 'confirm'       (Issue #21: リザルト等での「もう一度」)
  *
  * 長押し対応: keydown のイベントは OS のオートリピートで連発されるため、
  * 'drop' は事実上「押している間に連続発火」する形になる。明示的な keyup
@@ -23,6 +27,10 @@ export type KeyboardCommand =
   | 'drop'
   | 'togglePause'
   | 'restart'
+  | 'select1'
+  | 'select2'
+  | 'cancel'
+  | 'confirm'
 
 /** Window / HTMLElement のどちらでも attach できるよう緩く受ける。 */
 type KeyboardTarget = Window | HTMLElement
@@ -97,6 +105,15 @@ export class KeyboardManager {
       case 'r':
       case 'R':
         return 'restart'
+      case '1':
+        return 'select1'
+      case '2':
+        return 'select2'
+      case 'Escape':
+        return 'cancel'
+      case 'Enter':
+      case ' ':
+        return 'confirm'
       default:
         return null
     }
