@@ -6,6 +6,7 @@
 > Issue #14 でお題データ構造とローダーを追加した。
 > Issue #15 で `BoardRenderer` によるボード・ブロック描画を追加した。
 > Issue #16 で水中物理 (`UnderwaterPhysics`) を追加した。
+> Issue #18 で消去・連鎖ロジック (`src/game/`) と Vitest を追加した。
 
 ## 技術スタック
 
@@ -32,8 +33,12 @@ src/
 ├── scenes/
 │   ├── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
 │   └── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画
-└── physics/
-    └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
+├── physics/
+│   └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
+└── game/
+    ├── board.ts            # 着地計算 / ブロック固定 / 消去判定 / 重力 / 7 個数集計
+    ├── ChainRunner.ts      # 着水後の消去・重力・再判定を Promise チェーンで実行
+    └── randomBlocks.ts     # 1〜7 のブロック生成 (7 は 2%、1〜6 は残り 98% を等分)
 index.html                  # <div id="root"></div> に canvas をマウント (+ Inter Web フォント読込)
 ```
 
@@ -153,7 +158,66 @@ a = WATER_GRAVITY - WATER_BUOYANCY - WATER_DRAG * velocity
 ### 範囲外
 
 - 横揺れ (横方向の振動) は本 Issue ではスコープ外。Issue #17 で着水エフェクトと合わせて追加予定。
-- ブロックスポーン (`fallingBlock = null` → 新規生成) も本 Issue 外。`main.ts` にはお題ロード時に `fallingBlock` が空ならデバッグ用に 1 (Rose) を中央列に置く一時コードが入っており、Issue #18 で本来のスポーン処理に置き換える。
+
+## 消去・連鎖ロジック (Issue #18)
+
+旧 Phaser 版は `time.delayedCall(50ms)` でコールバック再帰していたが、PixiJS 移植では **Promise チェーン** で書き直した。`src/game/` 以下に純粋関数群 (`board.ts`) と、それを呼び出す非同期実行ロジック (`ChainRunner.ts`)、Next ブロック生成 (`randomBlocks.ts`) を集約。
+
+### 消去ルール
+
+- 縦または横に **連続した** ブロックの **任意の部分列** で合計が 7 になる箇所がすべて消える。
+  - 例: `1+2+4`, `2+5`, `3+4`, `1+1+1+1+1+1+1`
+  - 1 行の中に複数の合計 7 部分列があれば、すべて消去対象。
+  - `null` セルを跨いだ合計はしない (= 区間は最小限の連続)。
+- **7 ブロックは特別ルール**: 値 7 が **3 つ以上連続** したときだけ消える (`7+7` は消えない、`7+7+7` は消える)。単独の 7 (合計 = 7 の長さ 1 部分列) は通常ルールから除外する。
+- 縦と横で同じセルが両方マッチしても、消去座標は集合 (`Set<number>`) で 1 つに統合する。
+
+### 連鎖の Promise チェーン
+
+`runChain(state, opts)` は以下を loop:
+
+1. `findClearablePositions(state)` で消去対象を集める。空なら break。
+2. `chainLevel++`。
+3. `await delay(stepDelayMs)` (デフォルト 250ms) — 後続 Issue で着水・爆発エフェクトの間に挟むタイミング合わせ。
+4. `clearCells(state, positions)` で実際に null 化。`state.score` と `state.chainCount` を更新。
+5. `await delay(stepDelayMs)` — 爆発演出の見せ場用。
+6. `applyGravity(state)` で重力適用 → ループ先頭に戻る。
+
+スコアリングは旧スリーセブン準拠で `消去数 * 10 + 連鎖段数 * 50`。何も消えなければ `chainCount` を 0 にリセットして即解決する。
+
+テスト時は `runChain(state, { stepDelayMs: 0 })` で待機を消せる。
+
+### 着水 → 連鎖 → スポーンのフロー (`GameScene`)
+
+`GameScene` の Ticker は以下のフローを毎フレーム回す:
+
+1. `state.status !== 'playing'` または `isChaining` なら描画のみ。
+2. `fallingBlock` があれば `stepUnderwaterPhysics(state, deltaMS)` で物理を進める。
+3. `findLandingRow(state)` で着地 row を取得し、現在の `fallingBlock.row` がそれ以上なら着地と判定。
+4. 着地時は row をスナップして `lockFallingBlock(state)` → `runChain()` を起動 (`isChaining = true`)。
+5. `runChain` が解決したら:
+   - `countSevens(state) === 0` なら `state.status = 'cleared'` (= 全ての 7 を消したら勝ち)。
+   - そうでなければ `state.nextBlock` を新しい `fallingBlock` にセットし、`generateBlockValue()` で Next を補充。
+6. `isChaining = false` に戻して通常ループに復帰。
+
+### ブロック出現確率 (`randomBlocks.ts`)
+
+旧仕様 (1〜6 各 17%、7 が 2%) は合計 104% で歪なため、本実装では「7 を 2% で抜き出し、残り 98% を 1〜6 で等分」する形に正規化。RNG は引数で差し替え可能で、テスト時に決定論的に検証できる。
+
+## テスト (Issue #18)
+
+Vitest を導入した (Node 環境)。テスト対象は `src/game/` の純粋関数群が中心:
+
+- `src/game/board.test.ts` — 消去判定の各パターン (1+2+4, 2+5, 7+7+7 は消える / 7+7 は消えない, 縦横同時, 単独 7 は消えない 等)、`findLandingRow`、`lockFallingBlock`、`applyGravity`、`clearCells`、`countSevens`。
+- `src/game/randomBlocks.test.ts` — 境界値検証 + 100,000 試行で 7 の出現率が 2% に収束することを確認。
+- `src/game/ChainRunner.test.ts` — 単発消去、重力経由の 2 連鎖、7+7+7 + 重力後の連続消去、消去 0 件で即終了。`stepDelayMs: 0` で実時間 wait を除去。
+
+```bash
+npm test          # 1 回実行
+npm run test:watch # ファイル変更で再実行
+```
+
+`PixiJS` を含む `src/scenes/` のテストは jsdom が必要なため本 Issue ではスコープ外 (後続 Issue で必要が出たら追加)。
 
 ## カラーマッピング
 

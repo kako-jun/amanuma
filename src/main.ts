@@ -2,6 +2,7 @@ import { Application } from 'pixi.js'
 import { GameScene } from './scenes/GameScene'
 import { createInitialGameState } from './types/GameState'
 import { PuzzleRotation, buildGameStateFromPuzzle } from './data/loadPuzzle'
+import { generateBlockValue } from './game/randomBlocks'
 import './index.css'
 
 async function bootstrap(): Promise<void> {
@@ -38,16 +39,18 @@ async function bootstrap(): Promise<void> {
     state = createInitialGameState()
   }
 
-  // デバッグ: 起動直後に上から 1 (Rose) が落ちてくる挙動を見せる。
-  // 本来 #18 (連鎖ロジック) でゲームループから新規ブロックを生成する。
-  // お題側で `fallingBlock` が設定されていればそれを尊重する。
+  // Issue #18: Next ベースのスポーン。
+  // - お題側で `fallingBlock` が設定されていればそれを尊重する (再現テスト用)。
+  // - 未設定なら state.nextBlock を最初の落下ブロックとし、Next 枠は新たに
+  //   `generateBlockValue()` で補充する。
   if (state.fallingBlock === null) {
     state.fallingBlock = {
-      value: 1,
+      value: state.nextBlock,
       col: Math.floor(state.cols / 2),
       row: 0,
       velocity: 0,
     }
+    state.nextBlock = generateBlockValue()
   }
   scene.initWithState(state)
 }
