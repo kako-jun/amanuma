@@ -26,6 +26,7 @@ import { PlayerBoard } from './PlayerBoard'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
 import type { GameState } from '../types/GameState'
 import { UI_TEXT_PRIMARY } from '../constants/colors'
+import type { SoundManager } from '../audio/SoundManager'
 
 /** 2 つの盤面の間隔 (px)。 */
 const BOARD_GAP_PX = 64
@@ -48,7 +49,10 @@ export class VersusScene extends Container {
   /** 勝敗が確定したら true (以後の通知は抑止)。 */
   private settled: boolean = false
 
-  constructor(callbacks: VersusSceneCallbacks = {}) {
+  constructor(
+    callbacks: VersusSceneCallbacks = {},
+    soundManager: SoundManager | null = null
+  ) {
     super()
     this.callbacks = callbacks
 
@@ -78,16 +82,22 @@ export class VersusScene extends Container {
     this.p2Label.y = -28
     this.addChild(this.p2Label)
 
-    this.p1 = new PlayerBoard({
-      onChain: () => this.transferGarbage(this.p1, this.p2),
-      onCleared: () => this.handleEnd('p1', 'cleared'),
-      onGameOver: () => this.handleEnd('p1', 'gameover'),
-    })
-    this.p2 = new PlayerBoard({
-      onChain: () => this.transferGarbage(this.p2, this.p1),
-      onCleared: () => this.handleEnd('p2', 'cleared'),
-      onGameOver: () => this.handleEnd('p2', 'gameover'),
-    })
+    this.p1 = new PlayerBoard(
+      {
+        onChain: () => this.transferGarbage(this.p1, this.p2),
+        onCleared: () => this.handleEnd('p1', 'cleared'),
+        onGameOver: () => this.handleEnd('p1', 'gameover'),
+      },
+      soundManager
+    )
+    this.p2 = new PlayerBoard(
+      {
+        onChain: () => this.transferGarbage(this.p2, this.p1),
+        onCleared: () => this.handleEnd('p2', 'cleared'),
+        onGameOver: () => this.handleEnd('p2', 'gameover'),
+      },
+      soundManager
+    )
 
     // 仮配置 (initWithStates で再配置する)。
     this.p1.x = 0

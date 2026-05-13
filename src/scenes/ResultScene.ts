@@ -8,6 +8,7 @@
 import { Container, Graphics, Text } from 'pixi.js'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
 import { UI_PRIMARY, UI_SECONDARY, UI_TEXT_PRIMARY } from '../constants/colors'
+import type { SoundManager } from '../audio/SoundManager'
 
 export type ResultKind = 'cleared' | 'gameover' | 'win' | 'lose'
 
@@ -16,6 +17,15 @@ export interface ResultSceneOptions {
   score?: number
   onRestart: () => void
   onTitle: () => void
+  /**
+   * 任意の SoundManager 注入 (Issue #22)。
+   * 注入があれば、表示時に kind に応じた SFX (`puzzle-cleared` / `game-over`) を
+   * 鳴らし、ボタン操作時に `ui-select` を鳴らす。
+   * 注: PlayerBoard 側で先に `puzzle-cleared` / `game-over` を鳴らしているので
+   * ResultScene からは鳴らさない設計でも良いが、対戦結果 (win/lose) では
+   * PlayerBoard 経由の音が片方しか鳴らないため、ResultScene 側でも明示する。
+   */
+  soundManager?: SoundManager | null
 }
 
 interface ButtonAction {
@@ -52,10 +62,26 @@ function headlineText(kind: ResultKind): string {
 export class ResultScene extends Container {
   private readonly opts: ResultSceneOptions
   private readonly buttons: ButtonAction[] = []
+  private readonly soundManager: SoundManager | null
 
   constructor(opts: ResultSceneOptions) {
     super()
     this.opts = opts
+    this.soundManager = opts.soundManager ?? null
+
+    // 表示と同時に kind 別 SFX (対戦の場合は PlayerBoard 経由の SFX とは別 trigger)。
+    if (this.soundManager) {
+      switch (opts.kind) {
+        case 'cleared':
+        case 'win':
+          this.soundManager.playSfx('puzzle-cleared')
+          break
+        case 'gameover':
+        case 'lose':
+          this.soundManager.playSfx('game-over')
+          break
+      }
+    }
 
     // 見出し。
     const headline = new Text({
@@ -116,9 +142,11 @@ export class ResultScene extends Container {
       switch (cmd) {
         case 'restart':
         case 'confirm':
+          this.soundManager?.playSfx('ui-select')
           this.opts.onRestart()
           break
         case 'cancel':
+          this.soundManager?.playSfx('ui-select')
           this.opts.onTitle()
           break
         default:
@@ -174,6 +202,7 @@ export class ResultScene extends Container {
       this.drawButton(entry)
     })
     g.on('pointertap', () => {
+      this.soundManager?.playSfx('ui-select')
       if (entry.key === 'restart') this.opts.onRestart()
       else this.opts.onTitle()
     })

@@ -22,6 +22,8 @@ import { TouchManager } from './input/TouchManager'
 import { createInitialGameState } from './types/GameState'
 import { PuzzleRotation, buildGameStateFromPuzzle } from './data/loadPuzzle'
 import { generateBlockValue } from './game/randomBlocks'
+import { SoundManager } from './audio/SoundManager'
+import { MuteButton } from './audio/MuteButton'
 import './index.css'
 
 const VIEW_W = 800
@@ -63,10 +65,49 @@ async function bootstrap(): Promise<void> {
   }
 
   // ---------------------------------------------------------------------
+  // SoundManager (Issue #22)
+  // ---------------------------------------------------------------------
+  // - 1 個だけ生成し、各シーンに任意注入で渡す。
+  // - 起動時に localStorage からミュート状態を復元。
+  // - 初回 pointerdown / keydown で `unlock()` を呼ぶ (AudioContext を resume)。
+  // - アセット未配置時は 404 警告のみで silent (落ちない)。
+  const sound = new SoundManager()
+  sound.loadPersisted()
+
+  let unlocked = false
+  const unlockOnce = (): void => {
+    if (unlocked) return
+    unlocked = true
+    sound.unlock()
+    // BGM はタイトルから流したいので、unlock 後に再試行ループから抜けるよう
+    // 既に playBgm('bgm-title') を呼んでおく (下の bootstrap 末尾)。
+    window.removeEventListener('pointerdown', unlockOnce)
+    window.removeEventListener('keydown', unlockOnce)
+    window.removeEventListener('touchstart', unlockOnce)
+  }
+  window.addEventListener('pointerdown', unlockOnce, { once: false })
+  window.addEventListener('keydown', unlockOnce, { once: false })
+  window.addEventListener('touchstart', unlockOnce, { once: false })
+
+  // M キー (mute toggle) はシーン非依存で受ける。
+  // 個別シーンの onCommand に並列して購読しても、Set ベースなので両方発火する。
+  keyboard.onCommand(cmd => {
+    if (cmd === 'mute') sound.toggleMute()
+  })
+
+  // ---------------------------------------------------------------------
   // SceneManager + シーン群
   // ---------------------------------------------------------------------
   const sceneManager = new SceneManager(VIEW_W, VIEW_H)
   app.stage.addChild(sceneManager.world)
+
+  // ミュートボタンは canvas 右上に固定 (world ではなく stage 直下)。
+  // navigateTo で world が tween 中でも UI として常に同じ位置に表示される。
+  const muteButton = new MuteButton(sound, 32)
+  const MUTE_MARGIN = 8
+  muteButton.x = VIEW_W - 32 - MUTE_MARGIN
+  muteButton.y = MUTE_MARGIN
+  app.stage.addChild(muteButton)
 
   const rotation = new PuzzleRotation()
 
@@ -99,14 +140,14 @@ async function bootstrap(): Promise<void> {
   }
 
   // --- Title ---
-  const titleScene = new TitleScene(action => onTitleAction(action))
+  const titleScene = new TitleScene(action => onTitleAction(action), sound)
   // SceneManager 座標系: title は (400, 325) に置く。
   titleScene.x = SCENE_TRANSFORMS.title.x
   titleScene.y = SCENE_TRANSFORMS.title.y
   sceneManager.world.addChild(titleScene)
 
   // --- Single (GameScene, 統合モード: app=null) ---
-  const gameScene = new GameScene(null)
+  const gameScene = new GameScene(null, sound)
   // SceneManager の world に直接 PlayerBoard を入れる。
   // PlayerBoard 内部は盤面左上が (0,0)。center に置きたいので、シーン位置から
   // 盤面幅/高さの半分だけ左上にオフセットする (initWithState 後に再計算する)。
@@ -120,11 +161,14 @@ async function bootstrap(): Promise<void> {
   }
 
   // --- Versus ---
-  const versusScene = new VersusScene({
-    onP1Win: () => showResult({ kind: 'win' }),
-    onP2Win: () => showResult({ kind: 'lose' }),
-    onDraw: () => showResult({ kind: 'lose' }),
-  })
+  const versusScene = new VersusScene(
+    {
+      onP1Win: () => showResult({ kind: 'win' }),
+      onP2Win: () => showResult({ kind: 'lose' }),
+      onDraw: () => showResult({ kind: 'lose' }),
+    },
+    sound
+  )
   versusScene.x = SCENE_TRANSFORMS.versus.x
   versusScene.y = SCENE_TRANSFORMS.versus.y
   sceneManager.world.addChild(versusScene)
@@ -155,15 +199,20 @@ async function bootstrap(): Promise<void> {
     switch (key) {
       case 'title':
         activeUnsub = titleScene.attachInputs(keyboard)
+        sound.playBgm('bgm-title', { fadeMs: 500 })
         break
       case 'single':
         activeUnsub = gameScene.attachInputs(keyboard, touch)
+        sound.playBgm('bgm-game', { fadeMs: 500 })
         break
       case 'versus':
         activeUnsub = versusScene.attachInputs(keyboard)
+        sound.playBgm('bgm-versus', { fadeMs: 500 })
         break
       case 'result':
         if (resultScene) activeUnsub = resultScene.attachInputs(keyboard)
+        // result は短い曲なのでループしない。
+        sound.playBgm('bgm-result', { fadeMs: 500, loop: false })
         break
     }
   }
@@ -239,6 +288,7 @@ async function bootstrap(): Promise<void> {
     resultScene = new ResultScene({
       kind: opts.kind,
       score: opts.score,
+      soundManager: sound,
       onRestart: () => {
         // 直前のモードを判定する: cleared/gameover ならシングル、win/lose なら対戦。
         if (opts.kind === 'cleared' || opts.kind === 'gameover') {

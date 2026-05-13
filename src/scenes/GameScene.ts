@@ -16,6 +16,7 @@ import { PlayerBoard } from './PlayerBoard'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
 import type { TouchCommand, TouchManager } from '../input/TouchManager'
 import { generateBlockValue } from '../game/randomBlocks'
+import type { SoundManager } from '../audio/SoundManager'
 
 export interface RestartSource {
   build(): GameState | null
@@ -43,12 +44,18 @@ export class GameScene {
    * @param app `Application` を渡すと旧 API 互換モード (Ticker と stage 追加を自動でやる)。
    *            null を渡すと外部統合モード (Ticker / 入力 / 追加は呼び出し側の責任)。
    */
-  constructor(app: Application | null = null) {
+  constructor(
+    app: Application | null = null,
+    soundManager: SoundManager | null = null
+  ) {
     this.app = app
-    this.board = new PlayerBoard({
-      onCleared: () => this.onCleared?.(),
-      onGameOver: () => this.onGameOver?.(),
-    })
+    this.board = new PlayerBoard(
+      {
+        onCleared: () => this.onCleared?.(),
+        onGameOver: () => this.onGameOver?.(),
+      },
+      soundManager
+    )
     if (app !== null) {
       app.stage.addChild(this.board)
     }
