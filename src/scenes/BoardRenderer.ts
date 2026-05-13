@@ -18,11 +18,7 @@
 
 import { Container, Graphics, Text } from 'pixi.js'
 import type { GameState } from '../types/GameState'
-import {
-  BLOCK_COLORS,
-  UI_PRIMARY,
-  UI_TEXT_PRIMARY,
-} from '../constants/colors'
+import { BLOCK_COLORS, UI_PRIMARY, UI_TEXT_PRIMARY } from '../constants/colors'
 
 export interface BoardRendererOptions {
   /** 1 セルのピクセルサイズ */
