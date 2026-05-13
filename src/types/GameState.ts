@@ -27,7 +27,7 @@ export interface FallingBlock {
   row: number
   /**
    * 縦方向の速度。水中減衰振動用、初期 0。
-   * 単位は Issue #16 (水中物理プロファイル) で確定する (TODO #16)。
+   * 単位は row/s (= 1 秒あたりの行進行量、Issue #16 にて確定済み)。
    */
   velocity: number
 }

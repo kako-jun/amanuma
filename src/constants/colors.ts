@@ -42,6 +42,17 @@ export const UI_SECONDARY = 0x06b6d4
 export const UI_TEXT_PRIMARY = 0xffffff
 
 /**
+ * プレイヤー識別色 (DESIGN.md セクション 4.5 Player Indicators)。
+ *
+ * - UI_P1 (= `p1-color`): 緑 (`#10b981`)。VersusScene の P1 ラベル等で使用。
+ * - UI_P2 (= `p2-color`): アンバー (`#f59e0b`)。同 P2 ラベル等で使用。
+ *
+ * DESIGN.md の Hex 値と一致させること。
+ */
+export const UI_P1 = 0x10b981
+export const UI_P2 = 0xf59e0b
+
+/**
  * 描画レイアウト定数。
  *
  * DESIGN.md セクション 4 (Game Canvas) の border 2px を遵守する。

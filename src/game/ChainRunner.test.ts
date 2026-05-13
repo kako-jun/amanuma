@@ -148,37 +148,45 @@ describe('runChain', () => {
     it('消去 1 回につき onClear が 1 回呼ばれ、消去位置が渡される', async () => {
       // 横の 3+4 = 7 だけ消える単発消去。
       const state = makeState(['.....', '.....', '.34..'])
-      const calls: Set<number>[] = []
+      const calls: { positions: Set<number>; level: number }[] = []
       const result = await runChain(state, {
         stepDelayMs: 0,
-        onClear: positions => {
+        onClear: (positions, chainLevel) => {
           // 渡された Set のスナップショットを保持 (clearCells で破壊されない値)。
-          calls.push(new Set(positions))
+          calls.push({ positions: new Set(positions), level: chainLevel })
         },
       })
       expect(result.chainLevel).toBe(1)
       expect(calls.length).toBe(1)
       // (2,1) と (2,2) が消える。cols = 5。
       const expected = new Set<number>([2 * 5 + 1, 2 * 5 + 2])
-      expect(calls[0]).toEqual(expected)
+      expect(calls[0].positions).toEqual(expected)
+      // S13: chainLevel は 1 (単発消去 = 1 段目)。
+      expect(calls[0].level).toBe(1)
     })
 
     it('連鎖が発生したら各ステップで onClear が呼ばれる', async () => {
       // ChainRunner の 2 連鎖テストと同じ盤面。
       const state = makeState(['..3..', '..4..', '..2..', '.5...'])
-      const calls: Set<number>[] = []
+      const calls: { positions: Set<number>; level: number }[] = []
       const result = await runChain(state, {
         stepDelayMs: 0,
-        onClear: positions => {
-          calls.push(new Set(positions))
+        onClear: (positions, chainLevel) => {
+          calls.push({ positions: new Set(positions), level: chainLevel })
         },
       })
       expect(result.chainLevel).toBe(2)
       expect(calls.length).toBe(2)
-      // 1 段目: 縦 (0,2)+(1,2) が消える。
-      expect(calls[0]).toEqual(new Set<number>([0 * 5 + 2, 1 * 5 + 2]))
-      // 2 段目: 横 (3,1)+(3,2) が消える。
-      expect(calls[1]).toEqual(new Set<number>([3 * 5 + 1, 3 * 5 + 2]))
+      // 1 段目: 縦 (0,2)+(1,2) が消える。chainLevel = 1。
+      expect(calls[0].positions).toEqual(
+        new Set<number>([0 * 5 + 2, 1 * 5 + 2])
+      )
+      expect(calls[0].level).toBe(1)
+      // 2 段目: 横 (3,1)+(3,2) が消える。chainLevel = 2。
+      expect(calls[1].positions).toEqual(
+        new Set<number>([3 * 5 + 1, 3 * 5 + 2])
+      )
+      expect(calls[1].level).toBe(2)
     })
 
     it('消去対象が無いとき onClear は呼ばれない', async () => {
@@ -199,13 +207,15 @@ describe('runChain', () => {
       let snapshot: (number | null)[][] | null = null
       await runChain(state, {
         stepDelayMs: 0,
-        onClear: positions => {
+        onClear: (positions, chainLevel) => {
           // positions に含まれるセルはまだ board に値があるはず。
           for (const key of positions) {
             const row = Math.floor(key / state.cols)
             const col = key % state.cols
             expect(state.board[row][col]).not.toBeNull()
           }
+          // chainLevel は 1 以上 (単発の場合は 1)。
+          expect(chainLevel).toBeGreaterThanOrEqual(1)
           snapshot = state.board.map(r => r.slice())
         },
       })

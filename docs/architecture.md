@@ -309,7 +309,7 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 
 ### ChainRunner の `onClear` フック
 
-`runChain(state, { onClear })` の `onClear` は **消去発生の直前 (clearCells 呼び出しの直前)** で呼ばれる。コールバックには消去対象セルの `Set<row * cols + col>` が渡る。
+`runChain(state, { onClear })` の `onClear` は **消去発生の直前 (clearCells 呼び出しの直前)** で呼ばれる。コールバックには消去対象セルの `Set<row * cols + col>` と、**increment 後の連鎖段数 `chainLevel` (1 始まり)** が渡る (S13、Phase 3 post-review)。
 
 - 消去前に呼ぶ理由: 位置情報を使って演出を発火するため。clearCells 後だと board から値が消えてしまい、座標復元が `Set` キー経由 (row, col) でしかできなくなる。位置情報のみで十分な現状の演出には影響ないが、将来「消えた色を残した泡」等を入れる場合に備えて消去前のタイミングを正本とする。
 - 消去が発生しないステップでは呼ばれない (= ループ終了条件と等価)。
@@ -330,7 +330,7 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 
 ### 呼び出しタイミング (`GameScene`)
 
-`GameScene.startChainSequence` で `runChain(state, { onClear: positions => this.emitClearBubbles(positions) })` を渡す。`emitClearBubbles` は位置 `key = row * cols + col` から (row, col) を復元し、各セル中心 `(col * CELL_SIZE + 24, row * CELL_SIZE + 24)` で `emitBubbles({ kind: 'clear', count: 4 })` を発火する。
+`PlayerBoard.startChainSequence` で `runChain(state, { onClear: (positions, chainLevel) => this.emitClearBubbles(positions) })` を渡す。`emitClearBubbles` は位置 `key = row * cols + col` から (row, col) を復元し、各セル中心 `(col * CELL_SIZE + 24, row * CELL_SIZE + 24)` で `emitBubbles({ kind: 'clear', count: 4 })` を発火する。`chainLevel` は SFX (`chain-up`) の閾値判定にも使う (S13、Phase 3 post-review)。
 
 連鎖時はループの各ステップで `onClear` が呼ばれるため、段ごとに泡が立ち上がる。`stepDelayMs` (デフォルト 250ms) と泡の寿命 (1500..2500ms) の組み合わせで、次の段の泡が前の段の泡と重なって昇る絵になる。
 
@@ -443,10 +443,10 @@ class SceneManager {
 
 ```
 PlayerBoard.startChainSequence
-  └─ runChain({ onClear: positions => {
+  └─ runChain({ onClear: (positions, chainLevel) => {
          emitClearBubbles(positions)
          pendingGarbageOut += floor(positions.size / 3)
-         callbacks.onChain(cleared, chainLevel)
+         callbacks.onChain(cleared, chainLevel)  // S13: ChainRunner から chainLevel を直接受け取る
      }})
 VersusScene.transferGarbage(from, to)  ← onChain で呼ばれる
   └─ to.garbageReceived(from.consumePendingGarbage())

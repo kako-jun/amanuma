@@ -36,6 +36,7 @@ export class GameScene {
   private tickerFn: ((ticker: Ticker) => void) | null = null
   private restartSource: RestartSource | null = null
   private inputUnsubscribers: (() => void)[] = []
+  private onExitToTitle: (() => void) | null = null
   /** クリア / ゲームオーバー通知 (Issue #21、ResultScene 遷移用)。 */
   onCleared: (() => void) | null = null
   onGameOver: (() => void) | null = null
@@ -112,10 +113,20 @@ export class GameScene {
    *
    * 戻り値: unsubscribe 関数。
    */
+  /**
+   * 入力 Manager を購読する。
+   *
+   * @param keyboard キーボード入力 (null で無効化)。
+   * @param touch タッチ入力 (省略可、null で無効化)。
+   * @param onExitToTitle Esc (`cancel` コマンド) でタイトルに戻すコールバック (S5/S6)。
+   *                     未指定なら Esc はゲーム中は無視される (既定の挙動)。
+   */
   attachInputs(
     keyboard: KeyboardManager | null,
-    touch?: TouchManager | null
+    touch?: TouchManager | null,
+    onExitToTitle?: () => void
   ): () => void {
+    this.onExitToTitle = onExitToTitle ?? null
     const unsubs: (() => void)[] = []
     if (keyboard) {
       unsubs.push(keyboard.onCommand(cmd => this.handleKeyboard(cmd)))
@@ -167,8 +178,12 @@ export class GameScene {
       case 'restart':
         this.restart()
         break
+      case 'cancel':
+        // S5/S6: Esc でタイトルへ戻る。onExitToTitle 未注入時のみ無視。
+        this.onExitToTitle?.()
+        break
       default:
-        // select1 / select2 / cancel / confirm はゲーム中は無視。
+        // select1 / select2 / confirm はゲーム中は無視。
         break
     }
   }

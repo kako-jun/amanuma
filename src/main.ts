@@ -24,6 +24,7 @@ import { PuzzleRotation, buildGameStateFromPuzzle } from './data/loadPuzzle'
 import { generateBlockValue } from './game/randomBlocks'
 import { SoundManager } from './audio/SoundManager'
 import { MuteButton } from './audio/MuteButton'
+import { UI_BG } from './constants/colors'
 import './index.css'
 
 const VIEW_W = 800
@@ -47,7 +48,7 @@ async function bootstrap(): Promise<void> {
   await app.init({
     width: VIEW_W,
     height: VIEW_H,
-    background: 0x0f0f1a,
+    background: UI_BG,
     antialias: true,
     resolution: window.devicePixelRatio,
     autoDensity: true,
@@ -202,11 +203,19 @@ async function bootstrap(): Promise<void> {
         sound.playBgm('bgm-title', { fadeMs: 500 })
         break
       case 'single':
-        activeUnsub = gameScene.attachInputs(keyboard, touch)
+        activeUnsub = gameScene.attachInputs(keyboard, touch, () => {
+          // S5/S6: Esc でタイトルへ戻る。
+          setActiveScene('title')
+          void sceneManager.navigateTo('title', 800)
+        })
         sound.playBgm('bgm-game', { fadeMs: 500 })
         break
       case 'versus':
-        activeUnsub = versusScene.attachInputs(keyboard)
+        activeUnsub = versusScene.attachInputs(keyboard, touch, () => {
+          // S5/S6: Esc でタイトルへ戻る。
+          setActiveScene('title')
+          void sceneManager.navigateTo('title', 800)
+        })
         sound.playBgm('bgm-versus', { fadeMs: 500 })
         break
       case 'result':

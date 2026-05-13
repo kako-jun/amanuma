@@ -25,8 +25,9 @@ import type { Ticker } from 'pixi.js'
 import { Container, Text } from 'pixi.js'
 import { PlayerBoard } from './PlayerBoard'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
+import type { TouchCommand, TouchManager } from '../input/TouchManager'
 import type { GameState } from '../types/GameState'
-import { UI_TEXT_PRIMARY } from '../constants/colors'
+import { UI_P1, UI_P2 } from '../constants/colors'
 import type { SoundManager } from '../audio/SoundManager'
 
 /** 2 つの盤面の間隔 (px)。 */
@@ -64,7 +65,7 @@ export class VersusScene extends Container {
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 20,
         fontWeight: '700',
-        fill: 0x10b981, // p1-color (緑)
+        fill: UI_P1, // p1-color (緑)
       },
     })
     this.p1Label.x = 0
@@ -77,7 +78,7 @@ export class VersusScene extends Container {
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 20,
         fontWeight: '700',
-        fill: 0xf59e0b, // p2-color (アンバー)
+        fill: UI_P2, // p2-color (アンバー)
       },
     })
     this.p2Label.y = -28
@@ -107,10 +108,6 @@ export class VersusScene extends Container {
     this.p2.y = 0
     this.addChild(this.p1)
     this.addChild(this.p2)
-
-    // テキスト色は UI_TEXT_PRIMARY も参照可能だが、ここではプレイヤー色を直接指定。
-    // 未使用警告を防ぐ参照。
-    void UI_TEXT_PRIMARY
   }
 
   /**
@@ -147,15 +144,25 @@ export class VersusScene extends Container {
   }
 
   /**
-   * KeyboardManager の購読。
+   * KeyboardManager / TouchManager の購読。
    *
-   * 本 Issue では P1 のみ操作可能 (キーボード ← → ↓)。
+   * 本 Issue では P1 のみ操作可能 (キーボード ← → ↓ / タップ・スワイプ)。
    * P2 はオートプレイなしで待機する (= 1 個目を落とすところまでは見える)。
-   * R / Esc 等の遷移キーは VersusScene では扱わない (上位の main.ts が
-   * 別途 subscribe して ResultScene への遷移などを行う想定)。
+   *
+   * S5/S6: Esc (`cancel`) はゲーム中タイトルへ戻すフックを叩く。
+   * N22: TouchManager も任意で受け取り、P1 の盤面操作にタッチを通せるようにする。
+   *
+   * @param keyboard キーボード入力 Manager。
+   * @param touch 任意の TouchManager (P1 用)。null で無効化。
+   * @param onExitToTitle Esc でタイトルへ戻すコールバック。未指定なら Esc は無視。
    */
-  attachInputs(keyboard: KeyboardManager): () => void {
-    const handler = (cmd: KeyboardCommand): void => {
+  attachInputs(
+    keyboard: KeyboardManager,
+    touch?: TouchManager | null,
+    onExitToTitle?: () => void
+  ): () => void {
+    const unsubs: (() => void)[] = []
+    const keyHandler = (cmd: KeyboardCommand): void => {
       switch (cmd) {
         case 'left':
           this.p1.tryMove(-1)
@@ -170,11 +177,33 @@ export class VersusScene extends Container {
           this.p1.togglePause()
           this.p2.togglePause()
           break
+        case 'cancel':
+          onExitToTitle?.()
+          break
         default:
           break
       }
     }
-    return keyboard.onCommand(handler)
+    unsubs.push(keyboard.onCommand(keyHandler))
+    if (touch) {
+      const touchHandler = (cmd: TouchCommand): void => {
+        switch (cmd) {
+          case 'left':
+            this.p1.tryMove(-1)
+            break
+          case 'right':
+            this.p1.tryMove(+1)
+            break
+          case 'drop':
+            this.p1.tryDrop()
+            break
+        }
+      }
+      unsubs.push(touch.onCommand(touchHandler))
+    }
+    return (): void => {
+      for (const u of unsubs) u()
+    }
   }
 
   // ----------------------------------------------------------------------

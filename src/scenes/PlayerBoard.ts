@@ -80,12 +80,22 @@ export class PlayerBoard extends Container {
    */
   private soundManager: SoundManager | null
 
+  /**
+   * 乱数生成器 (Issue #21 post-review S7)。
+   *
+   * `garbageReceived` で 1..6 のお邪魔色を決めるのに使う。既定は `Math.random` だが、
+   * テストや決定論的シミュレーションのために差し替え可能にしている。
+   */
+  private readonly rng: () => number
+
   constructor(
     private readonly callbacks: PlayerBoardCallbacks = {},
-    soundManager: SoundManager | null = null
+    soundManager: SoundManager | null = null,
+    options: { rng?: () => number } = {}
   ) {
     super()
     this.soundManager = soundManager
+    this.rng = options.rng ?? Math.random
   }
 
   /** SoundManager を後から差し替える。null で音呼出を無効化。 */
@@ -225,12 +235,12 @@ export class PlayerBoard extends Container {
 
     this.isChaining = true
     void runChain(state, {
-      onClear: positions => {
+      // S13: ChainRunner が chainLevel (increment 後の値) を渡してくれる。
+      // 旧実装の `state.chainCount + 1` 推定 (clearCells 前は chainCount が未更新)
+      // は脆かったため、引数で受け取る方式に統一。
+      onClear: (positions, chainLevel) => {
         this.emitClearBubbles(positions)
         const cleared = positions.size
-        const chainLevel = state.chainCount + 1
-        // chainCount は runChain 内で更新されるが、onClear は clearCells の直前。
-        // chainLevel を独自に推定するのは難しいので chainCount を使う近似に留める。
         this.callbacks.onChain?.(cleared, chainLevel)
         // お邪魔送信 MVP: floor(clearedCount / 3)。
         this.pendingGarbageOut += Math.floor(cleared / 3)
@@ -350,7 +360,8 @@ export class PlayerBoard extends Container {
       for (let c = 0; c < cols; c++) {
         if (board[r][c] === null) {
           // 1..6 の中からランダム (お邪魔は 7 にはならない、テンポを崩さない範囲)。
-          const v = (Math.floor(Math.random() * 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6
+          // S7: RNG は DI 可能 (this.rng)。既定は Math.random。
+          const v = (Math.floor(this.rng() * 6) + 1) as 1 | 2 | 3 | 4 | 5 | 6
           board[r][c] = v
           placed++
           if (placed >= count) break outer

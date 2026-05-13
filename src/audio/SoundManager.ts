@@ -347,6 +347,41 @@ export class SoundManager {
       this.fadeTimer = null
     }
   }
+
+  /**
+   * SoundManager のリソースを解放する (N19)。
+   *
+   * - 進行中の cross-fade interval を停止
+   * - 現在の BGM を pause し、`src` を空にして参照を解除
+   * - mute listener を全クリア
+   * - AudioContext を close する (失敗は無視)
+   *
+   * 本 SPA では `bootstrap` の `sound` インスタンスを使い回すため、main.ts 側で
+   * destroy を呼ぶ必要は無い。ホットリロードや将来のテスト・組込みシナリオで
+   * SoundManager を安全に破棄するための API として用意する。
+   */
+  destroy(): void {
+    this.stopFadeTimer()
+    if (this.currentBgm) {
+      try {
+        this.currentBgm.pause()
+        this.currentBgm.src = ''
+      } catch {
+        /* DOM 解放済み等は無視 */
+      }
+      this.currentBgm = null
+      this.currentBgmKey = null
+    }
+    this.muteListeners.clear()
+    if (this.ctx !== null) {
+      try {
+        void this.ctx.close()
+      } catch {
+        /* 無視 */
+      }
+      this.ctx = null
+    }
+  }
 }
 
 function clamp01(v: number): number {
