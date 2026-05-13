@@ -25,10 +25,18 @@ export interface FallingBlock {
   col: number
   /** 行位置 (浮動小数、0..rows-1、0 が最上段) */
   row: number
-  /** 縦方向の速度。水中減衰振動用、初期 0 */
+  /**
+   * 縦方向の速度。水中減衰振動用、初期 0。
+   * 単位は Issue #16 (水中物理プロファイル) で確定する (TODO #16)。
+   */
   velocity: number
 }
 
+/**
+ * ゲーム状態。
+ * - `playing` ↔ `paused` の双方向遷移を想定
+ * - `cleared` / `gameover` は終端状態 (再遊技時は新規 state を作る)
+ */
 export type GameStatus = 'playing' | 'paused' | 'cleared' | 'gameover'
 
 /**
