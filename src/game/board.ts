@@ -234,6 +234,35 @@ export function applyGravity(state: GameState): boolean {
 }
 
 /**
+ * fallingBlock を `newCol` 列に移動できるかを判定する (Issue #20)。
+ *
+ * - mutate しない。
+ * - fallingBlock が null なら false。
+ * - `newCol` が盤面範囲外なら false。
+ * - 落下中ブロックは row が浮動小数で揺れるため、衝突判定では
+ *   `Math.floor(falling.row)` と `Math.ceil(falling.row)` の両方の整数行をチェックする
+ *   (どちらかの行で既にブロックがある列へは横移動禁止)。
+ * - 板上に占有セルが無く、範囲内であれば true。
+ *
+ * 呼び出し側 (`GameScene`) は本関数で確認したうえで `state.fallingBlock.col` を
+ * 書き換える。
+ */
+export function canMoveFallingTo(state: GameState, newCol: number): boolean {
+  const falling = state.fallingBlock
+  if (falling === null) return false
+  if (!Number.isInteger(newCol)) return false
+  if (newCol < 0 || newCol >= state.cols) return false
+
+  const rFloor = Math.floor(falling.row)
+  const rCeil = Math.ceil(falling.row)
+  for (const r of new Set([rFloor, rCeil])) {
+    if (r < 0 || r >= state.rows) continue
+    if (state.board[r][newCol] !== null) return false
+  }
+  return true
+}
+
+/**
  * 盤面に残っている 7 ブロックの個数を返す。
  *
  * - mutate しない。
