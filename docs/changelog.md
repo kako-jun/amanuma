@@ -19,7 +19,7 @@ Issue #10 を親に、#11〜#23 / #29 / #31 の連続 PR で実装。
 - `BeakerFrame` でビーカー silhouette + 水中の青み + 斜光ライティング (#31)
 
 ### 物理・ゲームロジック
-- 水中物理 (重力 18 / 浮力 6 / 粘性減衰 1.6 row/s²) を semi-implicit Euler で (#16)
+- 水中物理 (重力 18 row/s² / 浮力 6 row/s² / 粘性減衰係数 1.6 [1/s]) を semi-implicit Euler で (#16)
 - 消去・連鎖 (合計 7、7 は 3 つで消える) を Promise チェーンで (#18)
 - Vitest 導入 + board / randomBlocks / ChainRunner のテスト
 
@@ -42,7 +42,7 @@ Issue #10 を親に、#11〜#23 / #29 / #31 の連続 PR で実装。
 - Phaser 版コード一式は #11 で削除済 (#24 close)
 
 ### 統計
-- 164 tests passing
+- 159 tests passing
 - 9 PR (#11, #13–#22 の連続実装) + #29, #31, name-name#232
 
 ---

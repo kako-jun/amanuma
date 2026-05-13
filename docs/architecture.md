@@ -19,15 +19,15 @@
 - **ゲームエンジン**: PixiJS v8
 - **スタイル**: vanilla CSS (`src/index.css`)
 
-## ディレクトリ構造 (Issue #15 時点)
+## ディレクトリ構造 (Phase 3 完成時点)
 
 ```
 src/
-├── main.ts                 # PIXI.Application ブートストラップ + GameScene 起動 (PuzzleRotation 経由)
-├── index.css               # 最小リセット + body 背景
+├── main.ts                 # PIXI.Application ブートストラップ + SceneManager に全シーンを配置
+├── index.css               # 最小リセット + body 背景 + canvas violet glow
 ├── vite-env.d.ts           # Vite クライアント型
 ├── constants/
-│   └── colors.ts           # DESIGN.md 準拠の BLOCK_COLORS / UI_* (0x 表記)
+│   └── colors.ts           # DESIGN.md 準拠 BLOCK_COLORS / UI_* + CELL_SIZE / BOARD_BORDER_WIDTH 等
 ├── types/
 │   ├── GameState.ts        # GameState / BlockValue / FallingBlock 型 + ファクトリ
 │   └── Puzzle.ts           # PuzzleDefinition / PuzzleCollection / PuzzleLoadResult 型
@@ -38,25 +38,30 @@ src/
 │   ├── SceneManager.ts     # 巨大誌面 (world) と navigateTo() による cubicInOut tween (Issue #21)
 │   ├── PlayerBoard.ts      # 1 プレイヤー分の物理・連鎖・スポーン・着水演出 (Issue #21 で抽出)
 │   ├── GameScene.ts        # シングル用シーン (PlayerBoard を 1 個保持する薄いラッパ)
-│   ├── VersusScene.ts      # 対戦用シーン (PlayerBoard を 2 個 + お邪魔ブロック送信 MVP, Issue #21)
+│   ├── VersusScene.ts      # 対戦用シーン (PlayerBoard を 2 個 + お邪魔送信 MVP, Issue #21)
 │   ├── TitleScene.ts       # タイトル画面 (グラスボタン 3 種, Issue #21)
 │   ├── ResultScene.ts      # リザルト画面 (cleared/gameover/win/lose 表示, Issue #21)
-│   ├── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画 (shake API は Issue #17)
-│   └── effects/            # Issue #17 / #31
-│       ├── BeakerFrame.ts          # ビーカー (口広・底細台形) のガラス枠 + 水中の青み overlay (Issue #31)
-│       ├── BubbleParticleSystem.ts # 泡パーティクル (spawn/land/clear、#19 で共用予定)
-│       └── WaterSurface.ts # 水面の常駐 sin 波 + 局所波紋 + 光の筋 (Issue #31)
+│   ├── BoardRenderer.ts    # PIXI.Graphics でボード・ブロック描画 + 斜光ライティング + shake API
+│   └── effects/
+│       ├── BeakerFrame.ts          # ビーカー (口広・底細台形) ガラス枠 + 水中青み overlay (Issue #31)
+│       ├── BubbleParticleSystem.ts # 泡パーティクル (spawn/land/clear, Issue #17/#19)
+│       └── WaterSurface.ts         # 水面 sin 波 + 局所波紋 + 光の筋 (Issue #17/#31)
 ├── physics/
 │   └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
 ├── game/
 │   ├── board.ts            # 着地計算 / ブロック固定 / 消去判定 / 重力 / 7 個数集計 / 横移動衝突判定
-│   ├── ChainRunner.ts      # 着水後の消去・重力・再判定を Promise チェーンで実行
+│   ├── ChainRunner.ts      # 着水後の消去・重力・再判定を Promise チェーンで実行 (onClear フック)
 │   └── randomBlocks.ts     # 1〜7 のブロック生成 (7 は 2%、1〜6 は残り 98% を等分)
-└── input/                  # Issue #20
-    ├── KeyboardManager.ts  # キーマップ → KeyboardCommand へ変換、handler に通知
-    ├── TouchManager.ts     # PointerEvent → TouchCommand (左/右タップ・下スワイプ) 分類
-    └── constants.ts        # DROP_BOOST_VELOCITY 等の入力解釈用定数
+├── input/                  # Issue #20
+│   ├── KeyboardManager.ts  # キーマップ → KeyboardCommand へ変換、handler に通知
+│   ├── TouchManager.ts     # PointerEvent → TouchCommand (左/右タップ・下スワイプ) 分類
+│   └── constants.ts        # DROP_BOOST_VELOCITY 等の入力解釈用定数
+└── audio/                  # Issue #22
+    ├── SoundManager.ts     # WebAudio + HTMLAudioElement で SFX/BGM、ミュート永続化
+    └── MuteButton.ts       # canvas 右上常駐 (app.stage 直下、SceneManager.world と独立)
 index.html                  # <div id="root"></div> に canvas をマウント (+ Inter Web フォント読込)
+public/
+└── sounds/                 # SFX 7 種 + BGM 4 種を投入する (README.md 参照)
 ```
 
 ## 起動シーケンス
@@ -335,9 +340,9 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 - 連鎖カウント表示は別 Issue。
 - 音は #22。
 
-## テスト (Issue #18 / #20 / #17 / #19 / #21)
+## テスト (Issue #18 / #20 / #17 / #19 / #21 / #22 / #31)
 
-Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`と`src/scenes/**`** を jsdom 環境、それ以外は Node 環境で動かす。
+Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`、`src/scenes/**`、`src/audio/**`** を jsdom 環境、それ以外は Node 環境で動かす。**現状 159 tests passing (12 files)**。
 
 テスト対象:
 
@@ -348,9 +353,13 @@ Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`s
 - `src/input/TouchManager.test.ts` — `PointerEvent` 発火でタップ位置・下スワイプの分類、閾値カスタム、2 本目無視、`pointercancel` を検証 (jsdom)。
 - `src/scenes/effects/BubbleParticleSystem.test.ts` — `emitBubbles` での生成数、`update` の上昇移動、寿命到達での自動削除、`destroy()` のクリア (jsdom + 決定論的 RNG)。`kind: 'clear'` (#19) は `'land'` より上昇速度が遅いこと、速度レンジが -25..-45 px/s、寿命レンジが 1500..2500ms に収まることを検証。
 - `src/scenes/effects/WaterSurface.test.ts` — `splash` での登録、500ms 経過後の自動削除、複数 splash の独立寿命 (jsdom + 手動クロック)。
+- `src/scenes/effects/BeakerFrame.test.ts` — `getBackLayer` / `getFrontLayer` の取得、`destroy` 後の二重破棄耐性、デフォルト/カスタムオプションでの生成 (jsdom)。
 - `src/scenes/SceneManager.test.ts` — `cubicInOut` 単体 (境界 / 単調性)、`navigateTo` の即時スナップ (duration=0)、tween 中点・終端、進行中の navigateTo 切り替え、`applyCamera` の world 座標を検証。
 - `src/scenes/TitleScene.test.ts` — `attachInputs(KeyboardManager)` 経由で 1 / 2 / Escape / Enter が `onSelect('single' / 'versus' / 'exit' / 'single')` を発火することを検証 (jsdom)。
 - `src/scenes/ResultScene.test.ts` — R / Enter で `onRestart`、Escape で `onTitle` が呼ばれること、全 kind (cleared/gameover/win/lose) でコンストラクタが通ること、unsubscribe 後はキーが無効になることを検証 (jsdom)。
+- `src/audio/SoundManager.test.ts` — ミュート状態の persist/load、404 graceful、`playSfx` のクローン再生、`playBgm` の loop / cross-fade、`unlock` の AudioContext.resume と再 play を検証 (jsdom + HTMLAudioElement モック)。
+
+**未カバー (TODO)**: VersusScene の対戦ロジック (お邪魔送信 `transferGarbage`、勝敗判定 `handleEnd`)、`PlayerBoard` の `consumePendingGarbage` / `garbageReceived`。レビュー指摘 (Phase 3 review) で should レベルとして特定済み、別 Issue で対応。
 
 ```bash
 npm test          # 1 回実行

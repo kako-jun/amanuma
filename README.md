@@ -43,6 +43,7 @@ Live: <https://amanuma.pages.dev/> (Cloudflare Pages)
 - お題は積み上がった盤面からスタート (1・2 主体 + ターゲット 7)
 - **ターゲットの 7 をすべて消す** とクリア (`status='cleared'`)
 - 対戦モードは両者同一お題、消去 N 個で相手に `floor(N/3)` 個のお邪魔ブロックを送信、先にクリアした方が勝ち
+- 対戦モードは現状 **P1 のみ操作可** (P2 はキー未割当)。P2 は自動落下で沈み続けるため、操作しないと最終的に P1 の不戦勝になる MVP 仕様 (CPU AI / ネット対戦は今後の課題)
 
 ## 開発
 
@@ -62,7 +63,7 @@ npm run build        # tsc + vite build
 npm run preview      # ビルド結果プレビュー
 npm run lint         # ESLint
 npm run format       # Prettier
-npm test             # Vitest (164 tests)
+npm test             # Vitest (159 tests)
 ```
 
 ## ドキュメント
