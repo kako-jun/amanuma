@@ -151,10 +151,16 @@ export class VersusScene extends Container {
    *
    * 本 Issue では P1 のみ操作可能 (キーボード ← → ↓)。
    * P2 はオートプレイなしで待機する (= 1 個目を落とすところまでは見える)。
-   * R / Esc 等の遷移キーは VersusScene では扱わない (上位の main.ts が
-   * 別途 subscribe して ResultScene への遷移などを行う想定)。
+   *
+   * S5/S6: Esc (`cancel`) はゲーム中タイトルへ戻すフックを叩く。
+   *
+   * @param keyboard キーボード入力 Manager。
+   * @param onExitToTitle Esc でタイトルへ戻すコールバック。未指定なら Esc は無視。
    */
-  attachInputs(keyboard: KeyboardManager): () => void {
+  attachInputs(
+    keyboard: KeyboardManager,
+    onExitToTitle?: () => void
+  ): () => void {
     const handler = (cmd: KeyboardCommand): void => {
       switch (cmd) {
         case 'left':
@@ -169,6 +175,9 @@ export class VersusScene extends Container {
         case 'togglePause':
           this.p1.togglePause()
           this.p2.togglePause()
+          break
+        case 'cancel':
+          onExitToTitle?.()
           break
         default:
           break
