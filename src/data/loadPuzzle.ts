@@ -136,8 +136,8 @@ export function buildGameStateFromPuzzle(
     }
   }
 
-  // TODO #18: nextBlocks 省略時はランダム生成する想定。
-  //   現状は最初の 1 ブロックがフォールバックで常に 1 になる。
+  // nextBlocks 省略時は最初の 1 ブロックを `1` 固定にフォールバックする
+  // (Issue #18 で確定の MVP 仕様。1〜6 のランダム生成は将来のお題拡張時に検討)。
   const nextBlock: BlockValue = puzzle.nextBlocks?.[0] ?? 1
 
   const state: GameState = {

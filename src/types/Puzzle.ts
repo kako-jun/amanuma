@@ -23,7 +23,8 @@ export interface PuzzleDefinition {
   board: string[]
   /**
    * 最初に降ってくるブロックのキュー (任意)。
-   * 空なら呼び出し側で 1〜6 のランダム生成する想定 (TODO #18: 実装は連鎖ロジック側で)。
+   * 現状 (Issue #18 時点) は 1 個目のみ参照し、未指定なら `1` 固定にフォールバックする
+   * (`loadPuzzle.buildGameStateFromPuzzle` 参照)。1〜6 のランダム生成は未実装。
    */
   nextBlocks?: BlockValue[]
   /**
