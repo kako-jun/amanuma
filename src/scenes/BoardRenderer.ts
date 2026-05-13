@@ -39,6 +39,23 @@ const DEFAULT_OPTIONS: BoardRendererOptions = {
   borderWidth: BOARD_BORDER_WIDTH,
 }
 
+/**
+ * 着水時セル横揺れ (Issue #17)。
+ *
+ * `shake(row, col)` で記録されたセルは、`SHAKE_DURATION_MS` の間だけ
+ * `sin(t * ω) * decay` の x オフセットを乗せて揺れる。GameState を汚さず、
+ * 描画レイヤーだけで完結させる。
+ */
+interface ShakeEntry {
+  row: number
+  col: number
+  startMs: number
+}
+
+const SHAKE_DURATION_MS = 600
+const SHAKE_AMPLITUDE_PX = 3
+const SHAKE_FREQ_HZ = 12 // 12Hz ≈ 0.6 秒で 7 周期、減衰と相まって「揺れて止まる」
+
 export class BoardRenderer extends Container {
   /** 矩形・枠線などのプリミティブ描画用 (毎フレーム clear → 再構築)。 */
   private readonly graphics: Graphics
@@ -46,13 +63,26 @@ export class BoardRenderer extends Container {
   private readonly textPool: Text[]
   private readonly options: BoardRendererOptions
   private state: GameState | null = null
+  /** 着水セル横揺れの登録テーブル (Issue #17)。`update()` 内で時刻フィルタする。 */
+  private shakes: ShakeEntry[] = []
+  /**
+   * 時刻ソース。テストで差し替え可能。
+   * 既定は `performance.now`。SSR / Node 環境などでも fallback 可能なように
+   * 関数として保持する。
+   */
+  private readonly now: () => number
 
-  constructor(state: GameState, opts?: Partial<BoardRendererOptions>) {
+  constructor(
+    state: GameState,
+    opts?: Partial<BoardRendererOptions>,
+    now: () => number = () => performance.now()
+  ) {
     super()
     this.options = { ...DEFAULT_OPTIONS, ...opts }
     this.graphics = new Graphics()
     this.addChild(this.graphics)
     this.textPool = []
+    this.now = now
     this.setState(state)
   }
 
@@ -72,6 +102,23 @@ export class BoardRenderer extends Container {
   update(): void {
     if (!this.state) return
     this.draw()
+  }
+
+  /**
+   * 指定セルを「着水的に」揺らす (Issue #17)。
+   *
+   * 約 0.6 秒で減衰する横揺れを描画レイヤーで重ねる。
+   * GameState は触らず、`BoardRenderer` 内の `shakes` 配列に時刻を
+   * 記録するのみ。同じ (row, col) を多重登録しても重ね合わせ動作になる
+   * (短時間に複数着水が起きるケースは現状想定していないため許容)。
+   */
+  shake(row: number, col: number): void {
+    this.shakes.push({ row, col, startMs: this.now() })
+  }
+
+  /** テスト用: 現在生存中の shake 数。 */
+  get activeShakeCount(): number {
+    return this.shakes.length
   }
 
   // ----------------------------------------------------------------------
@@ -96,6 +143,10 @@ export class BoardRenderer extends Container {
       .fill({ color: 0x000000, alpha: BOARD_BG_ALPHA })
       .stroke({ color: UI_PRIMARY, width: borderWidth, alignment: 1 })
 
+    // 着水セル横揺れの時刻フィルタ (Issue #17)。
+    const nowMs = this.now()
+    this.shakes = this.shakes.filter(s => nowMs - s.startMs < SHAKE_DURATION_MS)
+
     // 描画したテキストインデックス。残りは visible=false で隠す。
     let textIndex = 0
 
@@ -104,7 +155,8 @@ export class BoardRenderer extends Container {
       for (let c = 0; c < state.cols; c++) {
         const cell = state.board[r][c]
         if (cell === null) continue
-        this.drawBlock(c * cellSize, r * cellSize, cell, textIndex)
+        const xOffset = this.computeShakeOffset(r, c, nowMs)
+        this.drawBlock(c * cellSize + xOffset, r * cellSize, cell, textIndex)
         textIndex++
       }
     }
@@ -125,6 +177,30 @@ export class BoardRenderer extends Container {
     for (let i = textIndex; i < this.textPool.length; i++) {
       this.textPool[i].visible = false
     }
+  }
+
+  /**
+   * (row, col) セルの横揺れオフセット [px] を返す。
+   *
+   * 全 shake エントリを線形に走査し、対象セルにマッチするものを
+   * `sin(2π * f * t) * (1 - age) * amplitude` で合算する。
+   * 同セルへの多重登録は重ね合わせる (短時間に複数着水するケースは
+   * 現状想定外なので問題視しない)。
+   */
+  private computeShakeOffset(row: number, col: number, nowMs: number): number {
+    let offset = 0
+    for (const s of this.shakes) {
+      if (s.row !== row || s.col !== col) continue
+      const ageMs = nowMs - s.startMs
+      if (ageMs < 0 || ageMs >= SHAKE_DURATION_MS) continue
+      const tSec = ageMs / 1000
+      const decay = 1 - ageMs / SHAKE_DURATION_MS
+      offset +=
+        Math.sin(2 * Math.PI * SHAKE_FREQ_HZ * tSec) *
+        decay *
+        SHAKE_AMPLITUDE_PX
+    }
+    return offset
   }
 
   /** 単一ブロックを (x, y) に描画する。textIndex は textPool のスロット。 */
