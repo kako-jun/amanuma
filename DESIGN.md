@@ -2,7 +2,7 @@
 
 ## 1. Visual Theme
 
-A Phaser-based web puzzle game in the Puyo Puyo tradition with a modern dark aesthetic. Deep navy backgrounds, violet and cyan neon accents, glass-effect UI buttons, and colorful game blocks with high contrast. The interface balances a polished, glowing game feel with functional touch controls for mobile play. Built with Tailwind CSS 4 for the HTML UI layer.
+A PixiJS-based web puzzle game in the Puyo Puyo tradition with a modern dark aesthetic. Deep navy backgrounds, violet and cyan neon accents, glass-effect UI buttons, and colorful game blocks with high contrast. The interface balances a polished, glowing game feel with functional touch controls for mobile play. The HTML UI layer is styled with vanilla CSS.
 
 ## 2. Color Palette
 
@@ -81,8 +81,8 @@ Inter is used throughout for its clean legibility at both large and small sizes,
 - Game canvas is the centerpiece, all UI radiates outward
 - Score panels flank the canvas on desktop (left P1, right P2)
 - Touch controls positioned below the canvas on mobile
-- Tailwind CSS 4 utility classes for the HTML shell
-- Phaser handles all in-canvas rendering
+- Vanilla CSS for the HTML shell
+- PixiJS handles all in-canvas rendering
 - Gap: 16px between UI sections
 
 ## 6. Depth & Elevation
@@ -126,7 +126,7 @@ Glow effects (box-shadow with color) are the primary depth cue. Shadows use viol
 - Canvas maintains aspect ratio (800:650) and scales down via CSS `max-width: 100%`
 - Touch buttons shrink from 64px to 52px on mobile
 - Score panels move from beside the canvas to above it on portrait mobile
-- Tailwind CSS 4 responsive utilities handle breakpoints
+- CSS media queries handle breakpoints
 
 ## 9. Agent Prompt Guide
 
@@ -142,4 +142,4 @@ When building new UI elements for amanuma:
 - **Block colors**: Rose, coral, gold, mint, sky, purple, magenta — gameplay only
 - **Transitions**: `0.15s ease` on all interactive elements
 - **Font**: Inter everywhere, loaded from Google Fonts
-- **Framework**: Tailwind CSS 4 for HTML UI; Phaser for canvas rendering
+- **Framework**: Vanilla CSS for HTML UI; PixiJS for canvas rendering
