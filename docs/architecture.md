@@ -461,6 +461,92 @@ PlayerBoard.garbageReceived(count)
 - 連鎖段数に応じた送信量の重み付け (今は単純な `floor(N/3)`)。
 - 連鎖カウント表示・対戦専用 UI (P1/P2 のスコアパネル等)。
 
+## 音 (Issue #22)
+
+ゲームの音は `src/audio/SoundManager.ts` の `SoundManager` クラスに集約する。
+重い音声ライブラリ (Howler / Tone) は導入せず、`HTMLAudioElement` と
+`AudioContext` の最小組み合わせで実現する。
+
+### 設計の前提
+
+- **アセットが無くても落ちない**。`Audio` の `error` イベントは黙って無視し、
+  ブラウザコンソールの 404 警告だけが出る。実音は `public/sounds/` に随時投入する。
+- SFX は `new Audio(src)` を毎回作って同時再生に耐える (短いので片付けは GC 任せ)。
+- BGM は 1 個の `HTMLAudioElement` を使い回し、`fadeMs` を渡せば `volume`
+  補間でクロスフェード。
+- `unlock()` を初回ユーザー操作 (pointerdown / keydown / touchstart) で呼ぶと
+  Safari/iOS のオートプレイポリシーを解除できる (`AudioContext.resume()`)。
+- ミュート状態は `localStorage` (key: `amanuma_muted`) に永続化、
+  `setMuted`/`toggleMute` 時に自動保存。
+- PixiJS のリソース管理とは独立。シーン遷移で勝手に停止されない。
+
+### SFX / BGM キー一覧
+
+`SoundManager` のキー (= `public/sounds/{key}.mp3` のファイル名)。
+
+#### SFX (短い効果音)
+
+| key              | 発火タイミング                                                   |
+| ---------------- | ---------------------------------------------------------------- |
+| `block-land`     | `PlayerBoard.emitLandEffect` (= 着水時)                          |
+| `block-spawn`    | `PlayerBoard.emitSpawnEffect` (= 新ブロック投入時)               |
+| `block-clear`    | `runChain` の `onClear` (連鎖各段の消去音)                       |
+| `chain-up`       | 2 連鎖目以降に `block-clear` と重ねて発火                        |
+| `puzzle-cleared` | `state.status = 'cleared'` 遷移時 / 対戦 win 時                  |
+| `game-over`      | `state.status = 'gameover'` 遷移時 / 対戦 lose 時                |
+| `ui-select`      | タイトル / リザルトのボタン操作 + キーボード confirm/cancel など |
+
+#### BGM (シーンごとに切替)
+
+| key          | シーン      | loop         |
+| ------------ | ----------- | ------------ |
+| `bgm-title`  | TitleScene  | ✓            |
+| `bgm-game`   | GameScene   | ✓            |
+| `bgm-versus` | VersusScene | ✓            |
+| `bgm-result` | ResultScene | ✗ (1 度きり) |
+
+`setActiveScene(key)` の中で `sound.playBgm(...)` を呼んで切り替える。
+同じ key が既に再生中なら `playBgm` は no-op で、上書き fade による音量の暴れを防ぐ。
+
+### ミュート UI
+
+`src/audio/MuteButton.ts` の `MuteButton` (PIXI Container 派生) を **`app.stage` 直下**
+(= `SceneManager.world` の外) に配置する。canvas 右上に固定で表示され、`navigateTo`
+の camera tween 中でも動かない。
+
+- クリック / タップで `SoundManager.toggleMute()`。
+- ラベルは `ON` / `OFF` のテキスト (emoji 未対応フォントを避ける)。
+- `SoundManager.onMuteChange()` を購読して再描画。
+
+### キーボードショートカット
+
+`KeyboardManager` に `mute` コマンドを追加。
+
+| キー      | コマンド | 動作                        |
+| --------- | -------- | --------------------------- |
+| `m` / `M` | `mute`   | `SoundManager.toggleMute()` |
+
+mute コマンドはシーン非依存で `main.ts` が直接購読する (画面遷移中でも常に効く)。
+
+### アセット投入手順
+
+1. 音ファイル (mp3, 44.1kHz, 320kbps 程度) を準備する。
+2. `public/sounds/{key}.mp3` のファイル名で配置する。詳細は
+   [`public/sounds/README.md`](../public/sounds/README.md) を参照。
+3. ビルド不要 (Vite の static asset 経由)。リロードで反映される。
+
+### 注入ポリシー (テスト容易性)
+
+`PlayerBoard` / `GameScene` / `VersusScene` / `TitleScene` / `ResultScene` は
+すべて `SoundManager` を **任意注入 (optional)** で受ける。テストや音不要のモードでは
+`null` を渡せば音呼出は完全にスキップされる (`?.()` chain で no-op)。
+
+### 後続 Issue で扱う予定
+
+- 実音アセットの制作 (kako 声 / シンセ / 録音)。
+- 連鎖段数に応じた `chain-up` のピッチ補正 (現状は同じ音を重ねる)。
+- 音量スライダー UI (現状はミュートのトグルのみ)。
+
 ## 後続 Issue で構築予定
 
 - `#13` GameState 型定義と `initWithState` 実装
@@ -472,4 +558,4 @@ PlayerBoard.garbageReceived(count)
 - `#19` 水中爆発エフェクト
 - `#20` キーボード・タッチ入力
 - `#21` TitleScene / VersusScene / シーン遷移 (実装済)
-- `#22` 音実装
+- `#22` 音実装 (実装済、アセット投入は後続)
