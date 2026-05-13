@@ -8,6 +8,7 @@
 > Issue #16 で水中物理 (`UnderwaterPhysics`) を追加した。
 > Issue #18 で消去・連鎖ロジック (`src/game/`) と Vitest を追加した。
 > Issue #20 でキーボード・タッチ入力 (`src/input/`) と一時停止・リスタートを追加した。
+> Issue #17 で着水エフェクト (`src/scenes/effects/`) を追加した。
 
 ## 技術スタック
 
@@ -33,7 +34,10 @@ src/
 │   └── loadPuzzle.ts       # listPuzzles / getPuzzleById / buildGameStateFromPuzzle / PuzzleRotation
 ├── scenes/
 │   ├── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
-│   └── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画
+│   ├── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画 (shake API は Issue #17)
+│   └── effects/            # Issue #17
+│       ├── BubbleParticleSystem.ts # 泡パーティクル (spawn/land/clear、#19 で共用予定)
+│       └── WaterSurface.ts # 水面の常駐 sin 波 + 局所波紋 (splash)
 ├── physics/
 │   └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
 ├── game/
@@ -255,9 +259,40 @@ a = WATER_GRAVITY - WATER_BUOYANCY - WATER_DRAG * velocity
 
 `GameScene.setRestartSource({ build(): GameState | null })` で注入する。`main.ts` では `PuzzleRotation.current()` + `buildGameStateFromPuzzle` を `build` に渡す。タイトル画面 (#21) 実装時は別ソースに差し替えることで「タイトルへ戻る」も同じ仕組みで作れる。
 
-## テスト (Issue #18 / #20)
+## 着水エフェクト (Issue #17)
 
-Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**` のみ jsdom\*\*、それ以外は Node 環境で動かす。
+ブロックが水面に「たぷん」と落ちる演出 + 盤面下部 (積層) への着水演出を、3 つのレイヤーで構成する。GameState は触らず、`GameScene` が以下を「上に重ねるだけ」で完結させる。
+
+### 3 つの構成要素
+
+| 要素                                      | 役割                                                                          |
+| ----------------------------------------- | ----------------------------------------------------------------------------- |
+| `WaterSurface` (`y=0` 水面)               | 常時 sin 波で揺らぎ、`splash(x, intensity)` で局所波紋を 500ms 発生           |
+| `BubbleParticleSystem` (盤面と同レイヤー) | 半透明白円を上方向にゆっくり立ち上がらせるパーティクル管理 (#19 でも共用予定) |
+| `BoardRenderer.shake(row, col)`           | 着水セルだけを 600ms の減衰横揺れ (`sin(2π·12Hz·t) · (1−age) · 3px`)          |
+
+### 呼び出しタイミング (`GameScene`)
+
+1. **Next からブロック投入時** (= `startChainSequence` の最後で次の `fallingBlock` を生成する瞬間、および `initWithState` 直後): `emitSpawnEffect(col)` を呼ぶ。
+   - `WaterSurface.splash(x, 0.7)`: 控えめな波紋。
+   - `BubbleParticleSystem.emitBubbles({ x, y: 0, kind: 'spawn', count: 3 })`: 3 個の泡。
+2. **ブロックが盤面下部 (積層) に着水したとき** (= `tick` 内で `landingRow` に到達した瞬間): `emitLandEffect(row, col)` を呼ぶ。
+   - `WaterSurface.splash(x, 1.0)`: 強めの波紋。
+   - `BubbleParticleSystem.emitBubbles({ x, y: row*CELL_SIZE + CELL_SIZE/2, kind: 'land', count: 4 })`: 4 個の泡。
+   - `BoardRenderer.shake(row, col)`: 着水セルの横揺れ (0.6 秒で減衰)。
+3. **毎フレーム**: `WaterSurface.update()` と `BubbleParticleSystem.update(deltaMS)` を Ticker から呼ぶ (`state.status` に関わらず常駐アニメは続ける)。
+
+### `BubbleKind` の区別 (`spawn` / `land` / `clear`)
+
+視覚パラメータは現状同じだが、呼び出し元の意図を `kind` で明示する。`'clear'` は Issue #19 (水中爆発) で消去時に使う想定で、本 Issue では発火していない。
+
+### 命名注: `emitBubbles`
+
+PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は型レベルで衝突する。`BubbleParticleSystem.emitBubbles()` の名前はこの衝突を避けるため。
+
+## テスト (Issue #18 / #20 / #17)
+
+Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`と`src/scenes/**`** を jsdom 環境、それ以外は Node 環境で動かす。
 
 テスト対象:
 
@@ -266,13 +301,15 @@ Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`s
 - `src/game/ChainRunner.test.ts` — 単発消去、重力経由の 2 連鎖、7+7+7 + 重力後の連続消去、消去 0 件で即終了。`stepDelayMs: 0` で実時間 wait を除去。
 - `src/input/KeyboardManager.test.ts` — `KeyboardEvent` 発火でキー → コマンド変換、`preventDefault`、unsubscribe、attach 重複防御を検証 (jsdom)。
 - `src/input/TouchManager.test.ts` — `PointerEvent` 発火でタップ位置・下スワイプの分類、閾値カスタム、2 本目無視、`pointercancel` を検証 (jsdom)。
+- `src/scenes/effects/BubbleParticleSystem.test.ts` — `emitBubbles` での生成数、`update` の上昇移動、寿命到達での自動削除、`destroy()` のクリア (jsdom + 決定論的 RNG)。
+- `src/scenes/effects/WaterSurface.test.ts` — `splash` での登録、500ms 経過後の自動削除、複数 splash の独立寿命 (jsdom + 手動クロック)。
 
 ```bash
 npm test          # 1 回実行
 npm run test:watch # ファイル変更で再実行
 ```
 
-`PixiJS` を含む `src/scenes/` のテストは jsdom + PIXI のモックが必要なため本 Issue ではスコープ外 (後続 Issue で必要が出たら追加)。
+PIXI.Graphics の WebGL/Canvas 描画自体は jsdom では動かない (`Not implemented: HTMLCanvasElement's getContext()` の警告が出る) ため、`scenes/effects` のテストはライフサイクル管理 (寿命・配列状態) に絞っている。BoardRenderer は state を見て毎フレーム再構築する純粋関数的な構造なので、テストせず手動確認に任せる方針は Issue #15 のまま据え置く。
 
 ## カラーマッピング
 
