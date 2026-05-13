@@ -25,6 +25,7 @@ import type { Ticker } from 'pixi.js'
 import { Container, Text } from 'pixi.js'
 import { PlayerBoard } from './PlayerBoard'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
+import type { TouchCommand, TouchManager } from '../input/TouchManager'
 import type { GameState } from '../types/GameState'
 import { UI_P1, UI_P2 } from '../constants/colors'
 import type { SoundManager } from '../audio/SoundManager'
@@ -107,7 +108,6 @@ export class VersusScene extends Container {
     this.p2.y = 0
     this.addChild(this.p1)
     this.addChild(this.p2)
-
   }
 
   /**
@@ -144,21 +144,25 @@ export class VersusScene extends Container {
   }
 
   /**
-   * KeyboardManager の購読。
+   * KeyboardManager / TouchManager の購読。
    *
-   * 本 Issue では P1 のみ操作可能 (キーボード ← → ↓)。
+   * 本 Issue では P1 のみ操作可能 (キーボード ← → ↓ / タップ・スワイプ)。
    * P2 はオートプレイなしで待機する (= 1 個目を落とすところまでは見える)。
    *
    * S5/S6: Esc (`cancel`) はゲーム中タイトルへ戻すフックを叩く。
+   * N22: TouchManager も任意で受け取り、P1 の盤面操作にタッチを通せるようにする。
    *
    * @param keyboard キーボード入力 Manager。
+   * @param touch 任意の TouchManager (P1 用)。null で無効化。
    * @param onExitToTitle Esc でタイトルへ戻すコールバック。未指定なら Esc は無視。
    */
   attachInputs(
     keyboard: KeyboardManager,
+    touch?: TouchManager | null,
     onExitToTitle?: () => void
   ): () => void {
-    const handler = (cmd: KeyboardCommand): void => {
+    const unsubs: (() => void)[] = []
+    const keyHandler = (cmd: KeyboardCommand): void => {
       switch (cmd) {
         case 'left':
           this.p1.tryMove(-1)
@@ -180,7 +184,26 @@ export class VersusScene extends Container {
           break
       }
     }
-    return keyboard.onCommand(handler)
+    unsubs.push(keyboard.onCommand(keyHandler))
+    if (touch) {
+      const touchHandler = (cmd: TouchCommand): void => {
+        switch (cmd) {
+          case 'left':
+            this.p1.tryMove(-1)
+            break
+          case 'right':
+            this.p1.tryMove(+1)
+            break
+          case 'drop':
+            this.p1.tryDrop()
+            break
+        }
+      }
+      unsubs.push(touch.onCommand(touchHandler))
+    }
+    return (): void => {
+      for (const u of unsubs) u()
+    }
   }
 
   // ----------------------------------------------------------------------

@@ -211,7 +211,7 @@ async function bootstrap(): Promise<void> {
         sound.playBgm('bgm-game', { fadeMs: 500 })
         break
       case 'versus':
-        activeUnsub = versusScene.attachInputs(keyboard, () => {
+        activeUnsub = versusScene.attachInputs(keyboard, touch, () => {
           // S5/S6: Esc でタイトルへ戻る。
           setActiveScene('title')
           void sceneManager.navigateTo('title', 800)
