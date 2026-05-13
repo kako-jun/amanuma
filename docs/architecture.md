@@ -5,6 +5,7 @@
 > シーン・ロジック構造は後続 Issue (#13〜#21) で再構築される。
 > Issue #14 でお題データ構造とローダーを追加した。
 > Issue #15 で `BoardRenderer` によるボード・ブロック描画を追加した。
+> Issue #16 で水中物理 (`UnderwaterPhysics`) を追加した。
 
 ## 技術スタック
 
@@ -28,9 +29,11 @@ src/
 ├── data/
 │   ├── puzzles.json        # お題コレクション (tutorial-01 / 02 / 03 を同梱)
 │   └── loadPuzzle.ts       # listPuzzles / getPuzzleById / buildGameStateFromPuzzle / PuzzleRotation
-└── scenes/
-    ├── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
-    └── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画
+├── scenes/
+│   ├── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
+│   └── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画
+└── physics/
+    └── UnderwaterPhysics.ts # 水中物理ステップ関数 (重力 - 浮力 - 粘性減衰)
 index.html                  # <div id="root"></div> に canvas をマウント (+ Inter Web フォント読込)
 ```
 
@@ -116,6 +119,41 @@ npm run format    # Prettier
 ## 描画方針 (Issue #15)
 
 ボード・ブロックの描画は `src/scenes/BoardRenderer.ts` が担う。旧 Phaser 版で `add.graphics()` を毎フレーム `clear()` → 再構築する素直な方針を採っていたため、PixiJS 移行後もそれを踏襲する。`BoardRenderer` は 1 個の `PIXI.Graphics` インスタンスを保持し、`update()` が呼ばれるたびに `clear()` してから盤面背景・枠線・全ブロックを描き直す。5x10 程度の盤面なら v8 の `Graphics` 再構築は十分軽量で、後続 Issue (#16 物理 / #17 着水 / #18-19 消去) で揺れ・波紋・消滅アニメを足す際にもこの「state を見て毎フレーム再描画」モデルがそのまま使える。一方、ブロック上の数字テキスト (`PIXI.Text`) は再生成コストが Graphics より高いため、`textPool` に保持して使い回す (毎フレーム visible のみ切り替える)。`GameScene` は `Application.ticker.add` で `BoardRenderer.update()` を毎フレーム呼ぶ。
+
+## 水中物理 (Issue #16)
+
+`fallingBlock` の縦方向落下は `src/physics/UnderwaterPhysics.ts` の `stepUnderwaterPhysics(state, deltaMS)` が司る。`GameScene` の Ticker 内で `BoardRenderer.update()` の **直前** に呼び出され、`state.fallingBlock.row` / `velocity` を mutate する。
+
+### 物理モデル
+
+1 次元 (縦) の自由落下 + 浮力 + 粘性抵抗:
+
+```
+a = WATER_GRAVITY - WATER_BUOYANCY - WATER_DRAG * velocity
+```
+
+| 定数 | 値 | 単位 | 役割 |
+|---|---|---|---|
+| `WATER_GRAVITY` | `18.0` | row/s² | 下向き重力加速度。通常重力より弱め |
+| `WATER_BUOYANCY` | `6.0` | row/s² | 上向き浮力。重力の約 1/3 なのでブロックは沈む |
+| `WATER_DRAG` | `1.6` | 1/s | 粘性抵抗係数 (速度比例)。終端速度を決める |
+| `MAX_VELOCITY` | `12.0` | row/s | 終端速度の安全上限 (パラメータ調整・dt スパイク防御) |
+
+積分は semi-implicit Euler (`v` を先に更新してから `row` を更新)。`deltaMS` は内部で `50ms` にクランプし、タブ非アクティブ復帰時の位置ジャンプを防ぐ。
+
+### row 単位で計算する設計理由
+
+物理は `row/s` 単位 (1 行 = `cellSize` ピクセル) で完結させ、ピクセル換算は `BoardRenderer` に任せる。こうすると `CELL_SIZE` (描画解像度) が変わっても物理パラメータを変えずに済み、テスト時も描画なしで挙動を検証できる。
+
+### 境界処理
+
+- 上端 (`row < 0`): `row` を 0 にクランプし、上向き速度を反発係数 `0.5` で反転 (水面でぬるっと跳ね返る)。
+- 下端 (`row > rows - 1`): `row` を `rows - 1` にクランプし、下向き速度を 0 にする。**着水後の board セル固定 (`board[r][c] = value`) や着水エフェクト (波紋・水しぶき・横揺れ) は本関数の責務外で、Issue #17 / #18 で実装する**。
+
+### 範囲外
+
+- 横揺れ (横方向の振動) は本 Issue ではスコープ外。Issue #17 で着水エフェクトと合わせて追加予定。
+- ブロックスポーン (`fallingBlock = null` → 新規生成) も本 Issue 外。`main.ts` にはお題ロード時に `fallingBlock` が空ならデバッグ用に 1 (Rose) を中央列に置く一時コードが入っており、Issue #18 で本来のスポーン処理に置き換える。
 
 ## カラーマッピング
 
