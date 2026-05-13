@@ -11,14 +11,18 @@
 - **ゲームエンジン**: PixiJS v8
 - **スタイル**: vanilla CSS (`src/index.css`)
 
-## ディレクトリ構造 (現時点・最小ブート)
+## ディレクトリ構造 (Issue #13 時点)
 
 ```
 src/
-├── main.ts        # PIXI.Application ブートストラップ
-├── index.css      # 最小リセット + body 背景
-└── vite-env.d.ts  # Vite クライアント型
-index.html        # <div id="root"></div> に canvas をマウント
+├── main.ts                 # PIXI.Application ブートストラップ + GameScene 起動
+├── index.css               # 最小リセット + body 背景
+├── vite-env.d.ts           # Vite クライアント型
+├── types/
+│   └── GameState.ts        # GameState / BlockValue / FallingBlock 型 + ファクトリ
+└── scenes/
+    └── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
+index.html                  # <div id="root"></div> に canvas をマウント
 ```
 
 ## 起動シーケンス
@@ -32,6 +36,9 @@ index.html        # <div id="root"></div> に canvas をマウント
    - `resolution: window.devicePixelRatio`, `autoDensity: true`
 2. `app.canvas` を `#root` 要素へ append
 3. マウント先が見つからない場合は Error を throw
+4. `GameScene` を生成し、`createInitialGameState()` を `initWithState` に流し込んで起動
+
+`GameScene.initWithState(state)` は任意の `GameState` から起動できる設計 (デバッグ・テスト容易化のため、後続 Issue でテストや任意局面再現に使う)。
 
 ## 画面サイズ
 
