@@ -284,13 +284,50 @@ a = WATER_GRAVITY - WATER_BUOYANCY - WATER_DRAG * velocity
 
 ### `BubbleKind` の区別 (`spawn` / `land` / `clear`)
 
-視覚パラメータは現状同じだが、呼び出し元の意図を `kind` で明示する。`'clear'` は Issue #19 (水中爆発) で消去時に使う想定で、本 Issue では発火していない。
+呼び出し元の意図を `kind` で明示する。`spawn` / `land` は #17 で同じパラメータを共有し、`clear` は #19 で別パラメータを持つ (下記)。
 
 ### 命名注: `emitBubbles`
 
 PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は型レベルで衝突する。`BubbleParticleSystem.emitBubbles()` の名前はこの衝突を避けるため。
 
-## テスト (Issue #18 / #20 / #17)
+## 消去時の泡 (Issue #19)
+
+ブロックが消えるとき「水中で気泡になってほどけて昇る」演出を、既存の `BubbleParticleSystem` の `kind: 'clear'` バリアントで発火する。新規レイヤーは増やさず、着水演出 (#17) と同じパーティクル系に乗せる。
+
+### ChainRunner の `onClear` フック
+
+`runChain(state, { onClear })` の `onClear` は **消去発生の直前 (clearCells 呼び出しの直前)** で呼ばれる。コールバックには消去対象セルの `Set<row * cols + col>` が渡る。
+
+- 消去前に呼ぶ理由: 位置情報を使って演出を発火するため。clearCells 後だと board から値が消えてしまい、座標復元が `Set` キー経由 (row, col) でしかできなくなる。位置情報のみで十分な現状の演出には影響ないが、将来「消えた色を残した泡」等を入れる場合に備えて消去前のタイミングを正本とする。
+- 消去が発生しないステップでは呼ばれない (= ループ終了条件と等価)。
+- 連鎖が発生したら 1 段ごとに呼ばれる。連鎖時は連続して泡が立ち上がる絵になる。
+
+### `'clear'` バリアントのパラメータ
+
+`BubbleParticleSystem` の `VARIANT_PARAMS.clear` で定義:
+
+| パラメータ | 値                | 備考                                                  |
+| ---------- | ----------------- | ----------------------------------------------------- |
+| 個数       | 4 (固定)          | `GameScene.emitClearBubbles` で `count: 4` を渡す     |
+| 上昇速度   | -25..-45 px/s     | `'land'` / `'spawn'` (-30..-70) よりも遅め            |
+| 寿命       | 1500..2500 ms     | 水面に向けてゆっくり昇る尺                            |
+| 半径       | 2..5 px           | 元ブロック (48px 矩形) よりかなり小さい               |
+| 横揺れ     | ±10 px sin        | 周期は他バリアントと共通 (`sin(ageMs / 200)`)         |
+| 色 / alpha | `0xffffff` / 0.55 | 半透明白で水中の気泡感                                |
+
+### 呼び出しタイミング (`GameScene`)
+
+`GameScene.startChainSequence` で `runChain(state, { onClear: positions => this.emitClearBubbles(positions) })` を渡す。`emitClearBubbles` は位置 `key = row * cols + col` から (row, col) を復元し、各セル中心 `(col * CELL_SIZE + 24, row * CELL_SIZE + 24)` で `emitBubbles({ kind: 'clear', count: 4 })` を発火する。
+
+連鎖時はループの各ステップで `onClear` が呼ばれるため、段ごとに泡が立ち上がる。`stepDelayMs` (デフォルト 250ms) と泡の寿命 (1500..2500ms) の組み合わせで、次の段の泡が前の段の泡と重なって昇る絵になる。
+
+### 本 Issue ではやらないこと
+
+- 「爆発の中心からの閃光」は描かない (本 Issue は泡のみ)。
+- 連鎖カウント表示は別 Issue。
+- 音は #22。
+
+## テスト (Issue #18 / #20 / #17 / #19)
 
 Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`と`src/scenes/**`** を jsdom 環境、それ以外は Node 環境で動かす。
 
@@ -298,10 +335,10 @@ Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`s
 
 - `src/game/board.test.ts` — 消去判定の各パターン (1+2+4, 2+5, 7+7+7 は消える / 7+7 は消えない, 縦横同時, 単独 7 は消えない 等)、`findLandingRow`、`lockFallingBlock`、`applyGravity`、`clearCells`、`countSevens`、`canMoveFallingTo` (境界・衝突・浮動小数 row)。
 - `src/game/randomBlocks.test.ts` — 境界値検証 + 100,000 試行で 7 の出現率が 2% に収束することを確認。
-- `src/game/ChainRunner.test.ts` — 単発消去、重力経由の 2 連鎖、7+7+7 + 重力後の連続消去、消去 0 件で即終了。`stepDelayMs: 0` で実時間 wait を除去。
+- `src/game/ChainRunner.test.ts` — 単発消去、重力経由の 2 連鎖、7+7+7 + 重力後の連続消去、消去 0 件で即終了。`stepDelayMs: 0` で実時間 wait を除去。`onClear` フック (#19) の呼び出し回数 / 引数 / 呼び出しタイミング (clearCells 前) も検証。
 - `src/input/KeyboardManager.test.ts` — `KeyboardEvent` 発火でキー → コマンド変換、`preventDefault`、unsubscribe、attach 重複防御を検証 (jsdom)。
 - `src/input/TouchManager.test.ts` — `PointerEvent` 発火でタップ位置・下スワイプの分類、閾値カスタム、2 本目無視、`pointercancel` を検証 (jsdom)。
-- `src/scenes/effects/BubbleParticleSystem.test.ts` — `emitBubbles` での生成数、`update` の上昇移動、寿命到達での自動削除、`destroy()` のクリア (jsdom + 決定論的 RNG)。
+- `src/scenes/effects/BubbleParticleSystem.test.ts` — `emitBubbles` での生成数、`update` の上昇移動、寿命到達での自動削除、`destroy()` のクリア (jsdom + 決定論的 RNG)。`kind: 'clear'` (#19) は `'land'` より上昇速度が遅いこと、速度レンジが -25..-45 px/s、寿命レンジが 1500..2500ms に収まることを検証。
 - `src/scenes/effects/WaterSurface.test.ts` — `splash` での登録、500ms 経過後の自動削除、複数 splash の独立寿命 (jsdom + 手動クロック)。
 
 ```bash

@@ -32,6 +32,8 @@ interface Bubble {
   /** 生存時間 [ms]、`ageMs >= lifeMs` で消滅 */
   lifeMs: number
   kind: BubbleKind
+  /** 横揺れ振幅 [px] (バリアント由来、update 時に毎フレーム参照する)。 */
+  swayAmplitudePx: number
 }
 
 export interface EmitOptions {
@@ -49,23 +51,76 @@ export type RandomSource = () => number
 
 const DEFAULT_COUNT = 3
 
-/** パーティクルの寿命範囲 [ms]。 */
-const LIFE_MS_MIN = 1500
-const LIFE_MS_RANGE = 1000
+/** 1 種類の発生バリアントの視覚パラメータ。 */
+interface BubbleVariantParams {
+  /** 寿命の下限 [ms]。 */
+  lifeMsMin: number
+  /** 寿命のレンジ [ms]、`lifeMsMin + rng() * lifeMsRange` で抽選。 */
+  lifeMsRange: number
+  /** 半径の下限 [px]。 */
+  radiusMin: number
+  /** 半径のレンジ [px]、`radiusMin + rng() * radiusRange` で抽選。 */
+  radiusRange: number
+  /** 上昇速度の下限 [px/s] (負値が上方向)。 */
+  vyMin: number
+  /** 上昇速度のレンジ [px/s] (負値が上方向に強くなる方向)。 */
+  vyRange: number
+  /** 発生位置のジッタ幅 [px] (中心 ± SPREAD/2)。 */
+  spawnSpreadPx: number
+  /** 横揺れの振幅 [px]。 */
+  swayAmplitudePx: number
+  /** Graphics の塗り alpha (0..1)。 */
+  alpha: number
+}
 
-/** 半径範囲 [px]。 */
-const RADIUS_MIN = 2
-const RADIUS_RANGE = 4
-
-/** 上昇速度範囲 [px/s] (負値が上)。 */
-const VY_MIN = -30
-const VY_RANGE = -40
-
-/** 発生位置のジッタ幅 [px] (中心 ±SPREAD/2)。 */
-const SPAWN_SPREAD_PX = 12
-
-/** 横揺れ振幅 [px]。`sin(ageMs / 200)` に乗せる。 */
-const SWAY_AMPLITUDE_PX = 8
+/**
+ * バリアントごとのパラメータ。
+ *
+ * - `'spawn'` / `'land'` (#17): 着水点・スポーン点から立ち上がる泡。
+ * - `'clear'` (#19): 消去セルから「水中で気泡になってほどける」演出。
+ *   寿命長め・半径少しバラつき・ゆっくり上昇。
+ */
+const VARIANT_PARAMS: Record<BubbleKind, BubbleVariantParams> = {
+  spawn: {
+    lifeMsMin: 1500,
+    lifeMsRange: 1000,
+    radiusMin: 2,
+    radiusRange: 4,
+    vyMin: -30,
+    vyRange: -40,
+    spawnSpreadPx: 12,
+    swayAmplitudePx: 8,
+    alpha: 0.6,
+  },
+  land: {
+    lifeMsMin: 1500,
+    lifeMsRange: 1000,
+    radiusMin: 2,
+    radiusRange: 4,
+    vyMin: -30,
+    vyRange: -40,
+    spawnSpreadPx: 12,
+    swayAmplitudePx: 8,
+    alpha: 0.6,
+  },
+  clear: {
+    // 消去演出は「ほどけて昇る」イメージで寿命を長め (1500..2500ms)。
+    lifeMsMin: 1500,
+    lifeMsRange: 1000,
+    // 半径は 2..5 px (元ブロック 48px 矩形より十分小さい)。
+    radiusMin: 2,
+    radiusRange: 3,
+    // 仕様: -25 〜 -45 px/s (= -1.5 〜 -3 row/s 程度、ゆっくり上昇)。
+    vyMin: -25,
+    vyRange: -20,
+    // 元ブロックのサイズを意識して内側に散らす (±10 px)。
+    spawnSpreadPx: 20,
+    // 横揺れ振幅 ±10 px。
+    swayAmplitudePx: 10,
+    // 水中の白い気泡感 (半透明白)。
+    alpha: 0.55,
+  },
+}
 
 /** 横揺れの周期係数 (ageMs を割る値が大きいほどゆっくり)。 */
 const SWAY_PERIOD_DIV = 200
@@ -110,8 +165,8 @@ export class BubbleParticleSystem extends Container {
       b.ageMs += deltaMS
       b.y += b.vy * dt
 
-      // 横揺れ (基準 x からの sin オフセット)。
-      const sway = Math.sin(b.ageMs / SWAY_PERIOD_DIV) * SWAY_AMPLITUDE_PX
+      // 横揺れ (基準 x からの sin オフセット)、振幅はバリアント依存。
+      const sway = Math.sin(b.ageMs / SWAY_PERIOD_DIV) * b.swayAmplitudePx
       b.graphic.x = b.baseX + sway
       b.graphic.y = b.y
 
@@ -153,18 +208,19 @@ export class BubbleParticleSystem extends Container {
   // ----------------------------------------------------------------------
 
   private spawnBubble(x: number, y: number, kind: BubbleKind): void {
-    const radius = RADIUS_MIN + this.rng() * RADIUS_RANGE
+    const params = VARIANT_PARAMS[kind]
+    const radius = params.radiusMin + this.rng() * params.radiusRange
     const g = new Graphics()
-    g.circle(0, 0, radius).fill({ color: 0xffffff, alpha: 0.6 })
+    g.circle(0, 0, radius).fill({ color: 0xffffff, alpha: params.alpha })
 
-    // 発生位置のジッタ (中心 ± SPAWN_SPREAD_PX/2)。
-    const baseX = x + (this.rng() - 0.5) * SPAWN_SPREAD_PX
+    // 発生位置のジッタ (中心 ± spawnSpreadPx/2)。
+    const baseX = x + (this.rng() - 0.5) * params.spawnSpreadPx
     g.x = baseX
     g.y = y
     this.addChild(g)
 
-    const vy = VY_MIN + this.rng() * VY_RANGE
-    const lifeMs = LIFE_MS_MIN + this.rng() * LIFE_MS_RANGE
+    const vy = params.vyMin + this.rng() * params.vyRange
+    const lifeMs = params.lifeMsMin + this.rng() * params.lifeMsRange
 
     this.bubbles.push({
       graphic: g,
@@ -175,6 +231,7 @@ export class BubbleParticleSystem extends Container {
       ageMs: 0,
       lifeMs,
       kind,
+      swayAmplitudePx: params.swayAmplitudePx,
     })
   }
 }

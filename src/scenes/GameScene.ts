@@ -238,7 +238,9 @@ export class GameScene {
     if (state === null) return
 
     this.isChaining = true
-    void runChain(state).then(() => {
+    void runChain(state, {
+      onClear: positions => this.emitClearBubbles(positions),
+    }).then(() => {
       // state が変わっている (destroy or 別お題ロード) なら何もしない。
       if (this.state !== state) {
         this.isChaining = false
@@ -281,6 +283,36 @@ export class GameScene {
     // 水面は y = 0 (盤面最上段)。
     this.water?.splash(xPx, 0.7)
     this.bubbles?.emitBubbles({ x: xPx, y: 0, kind: 'spawn', count: 3 })
+  }
+
+  /**
+   * 消去時の水中爆発演出 (Issue #19)。
+   *
+   * 連鎖の各ステップで `ChainRunner.onClear` から呼ばれる。
+   * 消去対象セル位置の `Set<row*cols+col>` を受け取り、各位置の
+   * セル中心から `kind: 'clear'` の泡を立ち上がらせる。
+   *
+   * パーティクル特性は `BubbleParticleSystem` の VARIANT_PARAMS で定義済み:
+   * 個数 4 / 上昇速度 -25..-45 px/s / 寿命 1500..2500ms / 半透明白。
+   */
+  private emitClearBubbles(positions: Set<number>): void {
+    const state = this.state
+    if (state === null || this.bubbles === null) return
+    const cols = state.cols
+    // ブロック 1 個につき 4 個の泡 (仕様 3〜5、控えめに 4 で固定)。
+    const COUNT_PER_CELL = 4
+    for (const key of positions) {
+      const row = Math.floor(key / cols)
+      const col = key % cols
+      const xPx = col * CELL_SIZE + CELL_SIZE / 2
+      const yPx = row * CELL_SIZE + CELL_SIZE / 2
+      this.bubbles.emitBubbles({
+        x: xPx,
+        y: yPx,
+        kind: 'clear',
+        count: COUNT_PER_CELL,
+      })
+    }
   }
 
   /**
