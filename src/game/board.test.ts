@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import type { BlockValue, BoardCell, GameState } from '../types/GameState'
 import {
   applyGravity,
+  canMoveFallingTo,
   clearCells,
   countSevens,
   findClearablePositions,
@@ -274,6 +275,60 @@ describe('clearCells', () => {
     const state = makeState(['.....'])
     const positions = new Set([0])
     expect(clearCells(state, positions)).toBe(0)
+  })
+})
+
+describe('canMoveFallingTo', () => {
+  it('fallingBlock が null なら false', () => {
+    const state = makeState(['.....', '.....'])
+    expect(canMoveFallingTo(state, 0)).toBe(false)
+  })
+
+  it('範囲外 (左) は false', () => {
+    const state = makeState(['.....', '.....'], {
+      fallingBlock: { value: 3, col: 0, row: 0, velocity: 0 },
+    })
+    expect(canMoveFallingTo(state, -1)).toBe(false)
+  })
+
+  it('範囲外 (右) は false', () => {
+    const state = makeState(['.....', '.....'], {
+      fallingBlock: { value: 3, col: 4, row: 0, velocity: 0 },
+    })
+    expect(canMoveFallingTo(state, 5)).toBe(false)
+  })
+
+  it('衝突セル無しなら true', () => {
+    const state = makeState(['.....', '.....'], {
+      fallingBlock: { value: 3, col: 2, row: 0, velocity: 0 },
+    })
+    expect(canMoveFallingTo(state, 1)).toBe(true)
+    expect(canMoveFallingTo(state, 3)).toBe(true)
+  })
+
+  it('移動先の現在 row に既存ブロックがあれば false', () => {
+    // row=1 で右隣 (col=3) が埋まっている。
+    const state = makeState(['.....', '..15.'], {
+      fallingBlock: { value: 3, col: 2, row: 1, velocity: 0 },
+    })
+    expect(canMoveFallingTo(state, 3)).toBe(false)
+    // 左 (col=1) は空なので true。
+    expect(canMoveFallingTo(state, 1)).toBe(true)
+  })
+
+  it('row が浮動小数 (1.4) でも floor/ceil いずれかにブロックがあれば false', () => {
+    // row=1 が空、row=2 が埋まっている。row=1.4 なので ceil=2 で衝突判定が動く。
+    const state = makeState(['.....', '.....', '..15.'], {
+      fallingBlock: { value: 3, col: 2, row: 1.4, velocity: 0 },
+    })
+    expect(canMoveFallingTo(state, 3)).toBe(false)
+  })
+
+  it('newCol が非整数なら false (誤呼び出し防御)', () => {
+    const state = makeState(['.....'], {
+      fallingBlock: { value: 3, col: 2, row: 0, velocity: 0 },
+    })
+    expect(canMoveFallingTo(state, 1.5)).toBe(false)
   })
 })
 
