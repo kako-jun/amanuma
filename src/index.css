@@ -1,114 +1,33 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-/* カスタムプロパティ（shadcn/ui風カラーパレット） */
-:root {
-  /* フォント */
-  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  /* カラースキーム */
-  color-scheme: dark;
-
-  /* 背景色 */
-  --background: 15 15 26;
-  --background-light: 26 26 46;
-  --background-card: 22 33 62;
-
-  /* テキスト色 */
-  --foreground: 248 250 252;
-  --foreground-muted: 148 163 184;
-
-  /* アクセントカラー */
-  --primary: 124 58 237;
-  --primary-glow: 168 85 247;
-  --secondary: 6 182 212;
-
-  /* 状態色 */
-  --success: 16 185 129;
-  --warning: 245 158 11;
-  --danger: 239 68 68;
-
-  /* ボーダー */
-  --border: 51 65 85;
-
-  /* 適用 */
-  color: rgba(var(--foreground), 0.87);
-  background-color: rgb(var(--background));
-
-  /* フォント最適化 */
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
 * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
 }
 
-html, body {
-  margin: 0;
-  padding: 0;
+html,
+body {
   width: 100%;
   height: 100%;
-  overflow-x: hidden;
-  overscroll-behavior: none;
-  background: linear-gradient(180deg, rgb(var(--background)) 0%, rgb(var(--background-light)) 100%);
+  margin: 0;
+  background: #0f0f1a;
+  color: #fff;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-#root {
+#root,
+#app {
   width: 100%;
-  max-width: 100vw;
-  margin: 0 auto;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
   min-height: 100vh;
-  min-height: 100dvh;
-}
-
-/* 選択不可 */
-.no-select {
-  user-select: none;
-  -webkit-user-select: none;
-}
-
-/* フォーカスリング */
-:focus-visible {
-  outline: 2px solid rgb(var(--primary));
-  outline-offset: 2px;
-}
-
-/* スクロールバー（WebKit） */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: rgb(var(--background-light));
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgb(var(--border));
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgb(var(--foreground-muted));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
