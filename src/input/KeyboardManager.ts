@@ -15,6 +15,7 @@
  *   2          → 'select2'        (Issue #21: タイトル画面で「対戦」)
  *   Escape     → 'cancel'         (Issue #21: タイトル/リザルトで「キャンセル / タイトルへ」)
  *   Enter / 空白 → 'confirm'       (Issue #21: リザルト等での「もう一度」)
+ *   m / M      → 'mute'           (Issue #22: ミュート切替)
  *
  * 長押し対応: keydown のイベントは OS のオートリピートで連発されるため、
  * 'drop' は事実上「押している間に連続発火」する形になる。明示的な keyup
@@ -31,6 +32,7 @@ export type KeyboardCommand =
   | 'select2'
   | 'cancel'
   | 'confirm'
+  | 'mute'
 
 /** Window / HTMLElement のどちらでも attach できるよう緩く受ける。 */
 type KeyboardTarget = Window | HTMLElement
@@ -114,6 +116,9 @@ export class KeyboardManager {
       case 'Enter':
       case ' ':
         return 'confirm'
+      case 'm':
+      case 'M':
+        return 'mute'
       default:
         return null
     }

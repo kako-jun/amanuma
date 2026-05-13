@@ -89,7 +89,11 @@ async function bootstrap(): Promise<void> {
   window.addEventListener('keydown', unlockOnce, { once: false })
   window.addEventListener('touchstart', unlockOnce, { once: false })
 
-  // 注: M キー (mute toggle) は KeyboardManager.mute コマンドとして別コミットで追加する。
+  // M キー (mute toggle) はシーン非依存で受ける。
+  // 個別シーンの onCommand に並列して購読しても、Set ベースなので両方発火する。
+  keyboard.onCommand(cmd => {
+    if (cmd === 'mute') sound.toggleMute()
+  })
 
   // ---------------------------------------------------------------------
   // SceneManager + シーン群
