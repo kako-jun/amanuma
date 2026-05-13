@@ -51,6 +51,7 @@ function parseCellChar(ch: string): BoardCell | undefined {
  * - 各行の長さが cols と一致するか
  * - 各文字が `.` または `1`〜`7` か
  * - nextBlocks (もしあれば) の各値が 1〜7 か
+ * - targetBlocks (もしあれば) の各座標が範囲内かつ盤面の `7` を指しているか
  *
  * 不正な場合は `{ ok: false, error }` を返す (throw しない)。
  */
@@ -110,6 +111,33 @@ export function buildGameStateFromPuzzle(
     }
   }
 
+  if (puzzle.targetBlocks) {
+    for (let i = 0; i < puzzle.targetBlocks.length; i++) {
+      const { row, col } = puzzle.targetBlocks[i]
+      if (
+        !Number.isInteger(row) ||
+        !Number.isInteger(col) ||
+        row < 0 ||
+        row >= puzzle.rows ||
+        col < 0 ||
+        col >= puzzle.cols
+      ) {
+        return {
+          ok: false,
+          error: `puzzle "${puzzle.id}": targetBlocks[${i}] = (${row},${col}) is out of range`,
+        }
+      }
+      if (board[row][col] !== 7) {
+        return {
+          ok: false,
+          error: `puzzle "${puzzle.id}": targetBlocks[${i}] = (${row},${col}) does not point to a 7-block (got ${board[row][col]})`,
+        }
+      }
+    }
+  }
+
+  // TODO #18: nextBlocks 省略時はランダム生成する想定。
+  //   現状は最初の 1 ブロックがフォールバックで常に 1 になる。
   const nextBlock: BlockValue = puzzle.nextBlocks?.[0] ?? 1
 
   const state: GameState = {
