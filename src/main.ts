@@ -2,11 +2,10 @@ import { Application } from 'pixi.js'
 import './index.css'
 
 async function bootstrap(): Promise<void> {
-  const container =
-    document.getElementById('app') ?? document.getElementById('root')
+  const container = document.getElementById('root')
 
   if (!container) {
-    throw new Error('Mount element (#app or #root) not found in index.html')
+    throw new Error('Mount element #root not found in index.html')
   }
 
   const app = new Application()

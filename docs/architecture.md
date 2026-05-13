@@ -27,10 +27,10 @@ index.html        # <div id="root"></div> に canvas をマウント
 
 1. `Application` を生成し `await app.init({...})` で初期化
    - `width: 800, height: 650` (DESIGN.md の Game Canvas 仕様)
-   - `backgroundColor: 0x0f0f1a` (DESIGN.md `bg` トークン)
+   - `background: 0x0f0f1a` (DESIGN.md `bg` トークン)
    - `antialias: true`
    - `resolution: window.devicePixelRatio`, `autoDensity: true`
-2. `app.canvas` を `#app` または `#root` 要素へ append
+2. `app.canvas` を `#root` 要素へ append
 3. マウント先が見つからない場合は Error を throw
 
 ## 画面サイズ
