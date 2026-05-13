@@ -27,7 +27,7 @@ export function listPuzzles(): readonly PuzzleDefinition[] {
 
 /** id を指定して お題を取得。見つからない場合は undefined。 */
 export function getPuzzleById(id: string): PuzzleDefinition | undefined {
-  return collection.puzzles.find((p) => p.id === id)
+  return collection.puzzles.find(p => p.id === id)
 }
 
 /**
@@ -58,10 +58,16 @@ export function buildGameStateFromPuzzle(
   puzzle: PuzzleDefinition
 ): PuzzleLoadResult {
   if (!Number.isInteger(puzzle.cols) || puzzle.cols <= 0) {
-    return { ok: false, error: `puzzle "${puzzle.id}": cols must be positive integer` }
+    return {
+      ok: false,
+      error: `puzzle "${puzzle.id}": cols must be positive integer`,
+    }
   }
   if (!Number.isInteger(puzzle.rows) || puzzle.rows <= 0) {
-    return { ok: false, error: `puzzle "${puzzle.id}": rows must be positive integer` }
+    return {
+      ok: false,
+      error: `puzzle "${puzzle.id}": rows must be positive integer`,
+    }
   }
   if (puzzle.board.length !== puzzle.rows) {
     return {
@@ -157,7 +163,10 @@ export class PuzzleRotation {
   /** ランダム選択 (rng を使用)。現在の index を更新する。返り値は新しい current。 */
   random(): PuzzleDefinition {
     const r = this.rng()
-    const i = Math.min(this.puzzles.length - 1, Math.max(0, Math.floor(r * this.puzzles.length)))
+    const i = Math.min(
+      this.puzzles.length - 1,
+      Math.max(0, Math.floor(r * this.puzzles.length))
+    )
     this.index = i
     return this.current()
   }
