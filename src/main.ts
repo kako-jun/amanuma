@@ -37,6 +37,18 @@ async function bootstrap(): Promise<void> {
     console.error('[amanuma] failed to load puzzle:', result.error)
     state = createInitialGameState()
   }
+
+  // デバッグ: 起動直後に上から 1 (Rose) が落ちてくる挙動を見せる。
+  // 本来 #18 (連鎖ロジック) でゲームループから新規ブロックを生成する。
+  // お題側で `fallingBlock` が設定されていればそれを尊重する。
+  if (state.fallingBlock === null) {
+    state.fallingBlock = {
+      value: 1,
+      col: Math.floor(state.cols / 2),
+      row: 0,
+      velocity: 0,
+    }
+  }
   scene.initWithState(state)
 }
 
