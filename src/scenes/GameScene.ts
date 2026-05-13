@@ -1,6 +1,8 @@
-import type { Application } from 'pixi.js'
+import type { Application, Ticker } from 'pixi.js'
 import { Container } from 'pixi.js'
 import type { GameState } from '../types/GameState'
+import { CELL_SIZE } from '../constants/colors'
+import { BoardRenderer } from './BoardRenderer'
 
 /**
  * ゲーム本編シーン。
@@ -8,15 +10,16 @@ import type { GameState } from '../types/GameState'
  * `initWithState(state)` で任意局面から起動できる設計
  * (デバッグ・テスト容易化が目的)。
  *
- * 本 Issue #13 では state 保持のみ。
- * - 描画は Issue #15 で実装する
- * - お題ロードは Issue #14
- * - ゲームループ / 物理 / 入力は Issue #16 / #18 / #20
+ * Issue #15 で `BoardRenderer` を組み込み、Ticker 経由で
+ * 毎フレーム再描画する。物理 / 消去 / 入力は別 Issue 担当。
  */
 export class GameScene {
   private state: GameState | null = null
   private readonly container: Container
   private readonly app: Application
+  private renderer: BoardRenderer | null = null
+  /** Ticker に登録した関数の参照 (destroy 時の remove 用)。 */
+  private tickerFn: ((ticker: Ticker) => void) | null = null
 
   constructor(app: Application) {
     this.app = app
@@ -30,14 +33,34 @@ export class GameScene {
    * state は参照保持される。呼び出し側は state を immutable に扱うこと
    * (= 一度渡したオブジェクトを外部から書き換えない)。
    *
-   * 再初期化時の描画 child の破棄・再生成責任は呼び出し側ではなく、
-   * 描画を実装する側 (Issue #15) が `this.container` をクリアする責任を持つ。
-   * 本 Issue #13 時点ではまだ描画 child が存在しないため何もしない。
+   * 再初期化時は既存の `BoardRenderer` を破棄して新しい renderer を生成する。
+   * cols/rows が変わるお題切替に対応するため、`setState` の使い回しではなく
+   * renderer 自体を作り直す方針 (生成コストは無視できる範囲)。
    */
   initWithState(state: GameState): void {
     this.state = state
-    // 描画は Issue #15 で実装する。
-    // 再初期化時は this.container.removeChildren() 相当の処理を #15 で追加する。
+
+    if (this.renderer) {
+      this.renderer.destroy({ children: true })
+      this.renderer = null
+    }
+
+    const renderer = new BoardRenderer(state, { cellSize: CELL_SIZE })
+    // 中央寄せ (Canvas の幅・高さは Application で 800x650)。
+    const boardWidthPx = state.cols * CELL_SIZE
+    const boardHeightPx = state.rows * CELL_SIZE
+    renderer.x = (this.app.screen.width - boardWidthPx) / 2
+    renderer.y = (this.app.screen.height - boardHeightPx) / 2
+    this.container.addChild(renderer)
+    this.renderer = renderer
+
+    // Ticker は最初の initWithState で一度だけ登録する (重複登録防止)。
+    if (!this.tickerFn) {
+      this.tickerFn = (): void => {
+        this.renderer?.update()
+      }
+      this.app.ticker.add(this.tickerFn)
+    }
   }
 
   /** 現在保持している state を返す (デバッグ・テスト用、参照を返す)。 */
@@ -52,7 +75,12 @@ export class GameScene {
    * (`this.container` は destroyed 済みになる)。
    */
   destroy(): void {
+    if (this.tickerFn) {
+      this.app.ticker.remove(this.tickerFn)
+      this.tickerFn = null
+    }
     this.container.destroy({ children: true })
     this.state = null
+    this.renderer = null
   }
 }

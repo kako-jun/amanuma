@@ -4,6 +4,7 @@
 > ゲームデザインも Issue #10 で「水中落ち物パズル / お題型」に刷新予定。
 > シーン・ロジック構造は後続 Issue (#13〜#21) で再構築される。
 > Issue #14 でお題データ構造とローダーを追加した。
+> Issue #15 で `BoardRenderer` によるボード・ブロック描画を追加した。
 
 ## 技術スタック
 
@@ -12,13 +13,15 @@
 - **ゲームエンジン**: PixiJS v8
 - **スタイル**: vanilla CSS (`src/index.css`)
 
-## ディレクトリ構造 (Issue #14 時点)
+## ディレクトリ構造 (Issue #15 時点)
 
 ```
 src/
 ├── main.ts                 # PIXI.Application ブートストラップ + GameScene 起動 (PuzzleRotation 経由)
 ├── index.css               # 最小リセット + body 背景
 ├── vite-env.d.ts           # Vite クライアント型
+├── constants/
+│   └── colors.ts           # DESIGN.md 準拠の BLOCK_COLORS / UI_* (0x 表記)
 ├── types/
 │   ├── GameState.ts        # GameState / BlockValue / FallingBlock 型 + ファクトリ
 │   └── Puzzle.ts           # PuzzleDefinition / PuzzleCollection / PuzzleLoadResult 型
@@ -26,8 +29,9 @@ src/
 │   ├── puzzles.json        # お題コレクション (tutorial-01 / 02 / 03 を同梱)
 │   └── loadPuzzle.ts       # listPuzzles / getPuzzleById / buildGameStateFromPuzzle / PuzzleRotation
 └── scenes/
-    └── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
-index.html                  # <div id="root"></div> に canvas をマウント
+    ├── GameScene.ts        # ゲーム本編シーン (initWithState で任意局面から起動可)
+    └── BoardRenderer.ts    # PIXI.Graphics でボード・ブロックを毎フレーム描画
+index.html                  # <div id="root"></div> に canvas をマウント (+ Inter Web フォント読込)
 ```
 
 ## 起動シーケンス
@@ -108,6 +112,26 @@ npm run preview   # ビルド結果プレビュー
 npm run lint      # ESLint
 npm run format    # Prettier
 ```
+
+## 描画方針 (Issue #15)
+
+ボード・ブロックの描画は `src/scenes/BoardRenderer.ts` が担う。旧 Phaser 版で `add.graphics()` を毎フレーム `clear()` → 再構築する素直な方針を採っていたため、PixiJS 移行後もそれを踏襲する。`BoardRenderer` は 1 個の `PIXI.Graphics` インスタンスを保持し、`update()` が呼ばれるたびに `clear()` してから盤面背景・枠線・全ブロックを描き直す。5x10 程度の盤面なら v8 の `Graphics` 再構築は十分軽量で、後続 Issue (#16 物理 / #17 着水 / #18-19 消去) で揺れ・波紋・消滅アニメを足す際にもこの「state を見て毎フレーム再描画」モデルがそのまま使える。一方、ブロック上の数字テキスト (`PIXI.Text`) は再生成コストが Graphics より高いため、`textPool` に保持して使い回す (毎フレーム visible のみ切り替える)。`GameScene` は `Application.ticker.add` で `BoardRenderer.update()` を毎フレーム呼ぶ。
+
+## カラーマッピング
+
+DESIGN.md セクション 2 (Block Colors) を `BlockValue` 1..7 にマッピングしたもの (`src/constants/colors.ts`)。Hex 値は DESIGN.md と完全一致させる。7 はクリア対象ブロックなので、もっとも目立つ Magenta を割り当てている。
+
+| BlockValue | DESIGN.md カラー名 | Hex |
+|---|---|---|
+| 1 | Rose    | `#ff6b9d` |
+| 2 | Coral   | `#ffa06b` |
+| 3 | Gold    | `#ffd93d` |
+| 4 | Mint    | `#6bffb8` |
+| 5 | Sky     | `#6bb3ff` |
+| 6 | Purple  | `#a06bff` |
+| 7 | Magenta | `#ff6bff` |
+
+ボード枠線は `UI_PRIMARY` (`#7c3aed`, Violet) で `alignment: 1` (内側) を指定する。ブロック上の数字テキストは `UI_TEXT_PRIMARY` (`#ffffff`) + Inter 700 (Google Fonts、`index.html` で読み込み)。
 
 ## 後続 Issue で構築予定
 
