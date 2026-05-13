@@ -24,6 +24,7 @@ import { PuzzleRotation, buildGameStateFromPuzzle } from './data/loadPuzzle'
 import { generateBlockValue } from './game/randomBlocks'
 import { SoundManager } from './audio/SoundManager'
 import { MuteButton } from './audio/MuteButton'
+import { UI_BG } from './constants/colors'
 import './index.css'
 
 const VIEW_W = 800
@@ -47,7 +48,7 @@ async function bootstrap(): Promise<void> {
   await app.init({
     width: VIEW_W,
     height: VIEW_H,
-    background: 0x0f0f1a,
+    background: UI_BG,
     antialias: true,
     resolution: window.devicePixelRatio,
     autoDensity: true,

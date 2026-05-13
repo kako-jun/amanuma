@@ -16,7 +16,12 @@
  */
 import { Container, Graphics, Text } from 'pixi.js'
 import type { SoundManager } from './SoundManager'
-import { UI_PRIMARY, UI_SECONDARY, UI_TEXT_PRIMARY } from '../constants/colors'
+import {
+  UI_BG,
+  UI_PRIMARY,
+  UI_SECONDARY,
+  UI_TEXT_PRIMARY,
+} from '../constants/colors'
 
 export class MuteButton extends Container {
   private readonly bg: Graphics
@@ -82,7 +87,7 @@ export class MuteButton extends Container {
     this.bg.clear()
     this.bg
       .roundRect(0, 0, this.size, this.size, 6)
-      .fill({ color: 0x0f0f1a, alpha: fillAlpha })
+      .fill({ color: UI_BG, alpha: fillAlpha })
       .stroke({ color: borderColor, width: 1, alpha: borderAlpha })
   }
 

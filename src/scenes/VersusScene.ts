@@ -26,7 +26,7 @@ import { Container, Text } from 'pixi.js'
 import { PlayerBoard } from './PlayerBoard'
 import type { KeyboardCommand, KeyboardManager } from '../input/KeyboardManager'
 import type { GameState } from '../types/GameState'
-import { UI_TEXT_PRIMARY } from '../constants/colors'
+import { UI_P1, UI_P2, UI_TEXT_PRIMARY } from '../constants/colors'
 import type { SoundManager } from '../audio/SoundManager'
 
 /** 2 つの盤面の間隔 (px)。 */
@@ -64,7 +64,7 @@ export class VersusScene extends Container {
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 20,
         fontWeight: '700',
-        fill: 0x10b981, // p1-color (緑)
+        fill: UI_P1, // p1-color (緑)
       },
     })
     this.p1Label.x = 0
@@ -77,7 +77,7 @@ export class VersusScene extends Container {
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 20,
         fontWeight: '700',
-        fill: 0xf59e0b, // p2-color (アンバー)
+        fill: UI_P2, // p2-color (アンバー)
       },
     })
     this.p2Label.y = -28
