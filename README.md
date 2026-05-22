@@ -75,6 +75,10 @@ npm test             # Vitest (159 tests)
 | [docs/changelog.md](docs/changelog.md) | 開発履歴 |
 | [DESIGN.md](DESIGN.md) | UI デザインシステム (カラーパレット、Inter フォント、グラスボタン) |
 
+## 表示サイズ
+
+論理解像度は 800×650。canvas は CSS で拡大せず、`src/main.ts` の `renderer.resize()` と `stage.scale` で viewport に収まる実 canvas サイズへ合わせる。
+
 ## サウンドアセット
 
 `public/sounds/` 配下に以下のファイルを置くと自動で鳴ります (詳細は [public/sounds/README.md](public/sounds/README.md)):

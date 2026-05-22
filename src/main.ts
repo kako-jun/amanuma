@@ -29,6 +29,7 @@ import './index.css'
 
 const VIEW_W = 800
 const VIEW_H = 650
+const VIEW_ASPECT = VIEW_W / VIEW_H
 
 /** 誌面 (world) 上の各シーンの絶対座標。「宇宙に浮かぶ別ページ」感を出す。 */
 const SCENE_TRANSFORMS = {
@@ -54,6 +55,20 @@ async function bootstrap(): Promise<void> {
     autoDensity: true,
   })
   container.appendChild(app.canvas)
+  const resizeCanvas = (): void => {
+    const windowAspect = window.innerWidth / window.innerHeight
+    const displayH =
+      windowAspect > VIEW_ASPECT
+        ? Math.floor(window.innerHeight)
+        : Math.floor(window.innerWidth / VIEW_ASPECT)
+    const displayW = Math.floor(displayH * VIEW_ASPECT)
+    app.renderer.resize(displayW, displayH)
+    app.stage.scale.set(displayW / VIEW_W)
+    app.canvas.style.width = `${displayW}px`
+    app.canvas.style.height = `${displayH}px`
+  }
+  resizeCanvas()
+  window.addEventListener('resize', resizeCanvas)
 
   // ---------------------------------------------------------------------
   // 入力 Manager (全シーン共有)
