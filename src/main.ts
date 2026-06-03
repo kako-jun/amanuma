@@ -20,7 +20,13 @@ import { ResultScene, type ResultKind } from './scenes/ResultScene'
 import { KeyboardManager } from './input/KeyboardManager'
 import { TouchManager } from './input/TouchManager'
 import { createInitialGameState } from './types/GameState'
+import type { GameState } from './types/GameState'
 import { PuzzleRotation, buildGameStateFromPuzzle } from './data/loadPuzzle'
+import {
+  readGameStateFromUrl,
+  loadGameState,
+  saveGameState,
+} from './persistence/saveStorage'
 import { generateBlockValue } from './game/randomBlocks'
 import { SoundManager } from './audio/SoundManager'
 import { MuteButton } from './audio/MuteButton'
@@ -139,10 +145,11 @@ async function bootstrap(): Promise<void> {
   > {
     return buildGameStateFromPuzzle(rotation.current())
   }
-  function ensureFallingState(): ReturnType<typeof createInitialGameState> {
-    const r = buildStateFromCurrentPuzzle()
-    const state = r.ok ? r.state : createInitialGameState()
-    if (!r.ok) console.error('[amanuma] failed to load puzzle:', r.error)
+  /**
+   * fallingBlock 未設定の state に Next ベースで 1 個補充する (破壊的)。
+   * 既に fallingBlock があればそのまま返す (= 復元時の中断局面を保つ)。
+   */
+  function ensureFalling(state: GameState): GameState {
     if (state.fallingBlock === null) {
       state.fallingBlock = {
         value: state.nextBlock,
@@ -153,6 +160,12 @@ async function bootstrap(): Promise<void> {
       state.nextBlock = generateBlockValue()
     }
     return state
+  }
+  function ensureFallingState(): ReturnType<typeof createInitialGameState> {
+    const r = buildStateFromCurrentPuzzle()
+    const state = r.ok ? r.state : createInitialGameState()
+    if (!r.ok) console.error('[amanuma] failed to load puzzle:', r.error)
+    return ensureFalling(state)
   }
 
   // --- Title ---
@@ -206,6 +219,26 @@ async function bootstrap(): Promise<void> {
   })
 
   // --------------------------------------------------------------------
+  // 復元起動 + 自動セーブ (Issue #56)
+  // --------------------------------------------------------------------
+  // 起動時に URL クエリ `?state=` または localStorage セーブが「有効なときだけ」
+  // シングルプレイを復元起動する。無効 / 不在なら上の title スナップのまま。
+  const restoreState = resolveRestoreState()
+  if (restoreState !== null) {
+    startSingle(restoreState)
+  }
+
+  // 最小限の保存トリガ: ページが非表示になる直前に、シングルプレイ中の
+  // 現局面を localStorage に自動セーブする。入力体系・UI は変更しない。
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'hidden') return
+      const state = gameScene.getState()
+      if (state !== null) saveGameState(state)
+    })
+  }
+
+  // --------------------------------------------------------------------
   // シーン遷移ハンドラ
   // --------------------------------------------------------------------
 
@@ -255,8 +288,25 @@ async function bootstrap(): Promise<void> {
     }
   }
 
-  function startSingle(): void {
-    const state = ensureFallingState()
+  /**
+   * 復元用の GameState を解決する (Issue #56)。
+   * 優先順位: URL クエリ `?state=` → localStorage セーブスロット。
+   * いずれも不在 / 検証 NG なら null を返し、呼び出し側は通常のお題ロードに
+   * フォールバックする。検証は永続化層 (純粋コア) に委ねている。
+   */
+  function resolveRestoreState(): GameState | null {
+    return readGameStateFromUrl() ?? loadGameState()
+  }
+
+  /**
+   * @param restoreState 復元起動する GameState (Issue #56)。省略時は現在のお題から構築。
+   */
+  function startSingle(restoreState?: GameState): void {
+    // 復元 state があればそれを優先。fallingBlock 未設定なら Next で補充する点は
+    // 通常起動と同じ扱いにする。
+    const state = restoreState
+      ? ensureFalling(restoreState)
+      : ensureFallingState()
     gameScene.initWithState(state)
     // SceneManager 統合モード: board を single ページの中心に置く。
     // single = (1500, 325) なので、盤面の中心がそこに来るよう x/y を補正。
