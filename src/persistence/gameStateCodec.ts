@@ -47,6 +47,46 @@ const VALID_STATUSES: readonly GameStatus[] = [
   'gameover',
 ]
 
+/**
+ * その status から「続きを遊べる」か (= 復元・自動セーブの対象として妥当か) を判定する純粋述語。
+ *
+ * `'playing'` / `'paused'` は中断局面として再開可能なので true。
+ * `'cleared'` / `'gameover'` は終端状態であり、復元しても fallingBlock が落ちず
+ * onCleared / onGameOver も再発火しないため操作不能に固まる (Issue #56 の must#1)。
+ * よって false を返し、呼び出し側 (自動セーブ・復元起動) が終端を除外できるようにする。
+ *
+ * DOM / localStorage / window に一切依存しない純粋関数。
+ */
+export function isResumableStatus(status: GameStatus): boolean {
+  return status === 'playing' || status === 'paused'
+}
+
+/**
+ * 復元候補 (URL 由来・localStorage 由来) から実際に復元起動すべき GameState を選ぶ純粋関数。
+ *
+ * 優先順位と棄却ルール (Issue #56):
+ * 1. URL `?state=` 候補を最優先する。ただし終端状態 (`isResumableStatus` false) なら採用しない。
+ * 2. URL 候補が無い / 終端で棄却された場合は localStorage 候補にフォールバックする。
+ *    こちらも終端状態なら採用しない。
+ * 3. どちらも採用不可なら null を返し、呼び出し側は通常のお題ロードへ進む。
+ *
+ * 終端状態 (cleared / gameover) を復元するとゲームが操作不能に固まるため、
+ * URL 経由で終端が来ても安全に弾く (must#1)。I/O を含まないので単体テストできる。
+ *
+ * @param urlState URL クエリから読んだ候補 (不在なら null)。
+ * @param localState localStorage から読んだ候補 (不在なら null)。
+ * @returns 復元起動に使う GameState、または採用候補が無ければ null。
+ */
+export function pickResumableState(
+  urlState: GameState | null,
+  localState: GameState | null
+): GameState | null {
+  if (urlState !== null && isResumableStatus(urlState.status)) return urlState
+  if (localState !== null && isResumableStatus(localState.status))
+    return localState
+  return null
+}
+
 /** 値が BlockValue (1〜7 の整数) か。 */
 function isBlockValue(v: unknown): v is BlockValue {
   return typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 7
@@ -74,9 +114,11 @@ export function serializeGameState(state: GameState): string {
 /**
  * シリアライズ済み文字列を GameState に復元する。
  *
- * `serializeGameState` の出力 (encodeURIComponent 済み) を渡す前提だが、
- * decode 前の生 JSON が渡されても極力受理できるよう、decode 失敗時は
- * 入力をそのまま JSON.parse する (= 二重 decode の保険ではなく単純化のため)。
+ * `serializeGameState` の出力 (encodeURIComponent 済み) を渡す前提。なお
+ * `decodeURIComponent` は `{` `}` `"` といった JSON 記号をエスケープ対象とせず
+ * 素通しするため、encode していない生 JSON エンベロープも decode 成功経路で
+ * そのまま受理される。`decodeURIComponent` 自体が throw するのは不正な `%`
+ * シーケンスを含むときだけで、その場合は生入力を JSON.parse 試行する保険を置く。
  *
  * 検証に通らない入力 (parse 失敗 / バージョン不一致 / 盤面寸法不整合 /
  * 不正なセル値 / 不正な status 等) では throw せず null を返す。
@@ -93,7 +135,9 @@ export function deserializeGameState(input: string): GameState | null {
     try {
       decoded = decodeURIComponent(input)
     } catch {
-      // 不正な % エスケープ等。生入力をそのまま parse 試行する。
+      // decodeURIComponent が throw するのは不正な % シーケンスのときのみ。
+      // その場合は生入力をそのまま JSON.parse 試行する (記号は素通しなので
+      // 正常な生 JSON は上の decode 経路で既に受理されている)。
       decoded = input
     }
     raw = JSON.parse(decoded)

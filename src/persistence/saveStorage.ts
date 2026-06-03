@@ -58,7 +58,12 @@ export function loadGameState(): GameState | null {
   }
 }
 
-/** localStorage のセーブスロットを消去する。 */
+/**
+ * localStorage のセーブスロットを消去する。
+ *
+ * 意図的に export している public API。Issue #56 の配線ではまだ呼び出していないが、
+ * 将来のセーブ管理 UI (セーブ削除ボタン等、save-slot UI / #56 スコープ外) で使う。
+ */
 export function clearGameState(): void {
   try {
     if (typeof localStorage === 'undefined') return
@@ -95,7 +100,10 @@ export function readGameStateFromUrl(search?: string): GameState | null {
 
 /**
  * GameState を URL クエリ文字列断片 (`state=...`) に変換する。
- * 共有 URL 生成などに使う想定。`?` や他パラメータの結合は呼び出し側の責任。
+ *
+ * 意図的に export している public API。Issue #56 の配線ではまだ呼び出していないが、
+ * 将来の共有 URL 生成 (現局面を `?state=` 付き URL でシェア、#56 スコープ外) で使う。
+ * `?` や他パラメータの結合は呼び出し側の責任。
  */
 export function toStateQueryParam(state: GameState): string {
   // serializeGameState は既に encodeURIComponent 済みなので二重 encode しない。
