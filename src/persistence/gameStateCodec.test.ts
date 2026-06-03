@@ -17,6 +17,8 @@ import {
   GAME_STATE_FORMAT_VERSION,
   serializeGameState,
   deserializeGameState,
+  isResumableStatus,
+  pickResumableState,
 } from './gameStateCodec'
 
 /** 全セル null の rows×cols 盤面。 */
@@ -596,6 +598,63 @@ describe('gameStateCodec', () => {
         },
       })
       expect(deserializeGameState(env)).toBeNull()
+    })
+  })
+
+  describe('isResumableStatus (終端棄却の純粋述語, must#1)', () => {
+    it("status='playing' → true", () => {
+      expect(isResumableStatus('playing')).toBe(true)
+    })
+
+    it("status='paused' → true (中断局面は保存・復元対象, question#4)", () => {
+      expect(isResumableStatus('paused')).toBe(true)
+    })
+
+    it("status='cleared' → false (終端は復元すると固まる)", () => {
+      expect(isResumableStatus('cleared')).toBe(false)
+    })
+
+    it("status='gameover' → false (終端は復元すると固まる)", () => {
+      expect(isResumableStatus('gameover')).toBe(false)
+    })
+  })
+
+  describe('pickResumableState (優先順位 + 終端棄却, must#1)', () => {
+    it('両方 null → null', () => {
+      expect(pickResumableState(null, null)).toBeNull()
+    })
+
+    it('URL 候補 (playing) を最優先する', () => {
+      const url = makeState({ score: 1, status: 'playing' })
+      const local = makeState({ score: 2, status: 'playing' })
+      expect(pickResumableState(url, local)).toBe(url)
+    })
+
+    it('URL 候補 (paused) も採用する', () => {
+      const url = makeState({ status: 'paused' })
+      expect(pickResumableState(url, null)).toBe(url)
+    })
+
+    it('URL が終端 (cleared) なら棄却し localStorage にフォールバック', () => {
+      const url = makeState({ status: 'cleared' })
+      const local = makeState({ score: 5, status: 'playing' })
+      expect(pickResumableState(url, local)).toBe(local)
+    })
+
+    it('URL が終端 (gameover) で localStorage も終端なら null', () => {
+      const url = makeState({ status: 'gameover' })
+      const local = makeState({ status: 'cleared' })
+      expect(pickResumableState(url, local)).toBeNull()
+    })
+
+    it('URL 不在で localStorage (paused) を採用する', () => {
+      const local = makeState({ status: 'paused' })
+      expect(pickResumableState(null, local)).toBe(local)
+    })
+
+    it('URL 不在で localStorage が終端 (cleared) なら null', () => {
+      const local = makeState({ status: 'cleared' })
+      expect(pickResumableState(null, local)).toBeNull()
     })
   })
 
