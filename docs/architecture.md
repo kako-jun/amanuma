@@ -11,6 +11,7 @@
 > Issue #17 で着水エフェクト (`src/scenes/effects/`) を追加した。
 > Issue #21 で `SceneManager` + `TitleScene` / `VersusScene` / `ResultScene` / `PlayerBoard` を追加し、誌面パン&ズーム演出を導入した。
 > Issue #31 で `BeakerFrame` を追加し、盤面をビーカー型ガラス容器のシルエットで囲み、斜光ライティング (上面ハイライト・下面影・水面の光の筋) を導入した。
+> Issue #56 で `src/persistence/` (GameState シリアライズ/復元 codec + localStorage/URL アダプタ) を追加し、URL クエリ `?state=` とセーブデータからの任意局面復元・タブ非表示時の自動セーブを導入した。復元・自動セーブの対象は再開可能な status (`playing` / `paused`) のみで、終端状態 (`cleared` / `gameover`) は純粋述語 `isResumableStatus` / `pickResumableState` で弾く (復元すると操作不能に固まるため)。URL `?state=` からの復元成功後は `history.replaceState` で param を除去し、以降は localStorage を正本にする。
 
 ## 技術スタック
 
@@ -56,9 +57,12 @@ src/
 │   ├── KeyboardManager.ts  # キーマップ → KeyboardCommand へ変換、handler に通知
 │   ├── TouchManager.ts     # PointerEvent → TouchCommand (左/右タップ・下スワイプ) 分類
 │   └── constants.ts        # DROP_BOOST_VELOCITY 等の入力解釈用定数
-└── audio/                  # Issue #22
-    ├── SoundManager.ts     # WebAudio + HTMLAudioElement で SFX/BGM、ミュート永続化
-    └── MuteButton.ts       # canvas 右上常駐 (app.stage 直下、SceneManager.world と独立)
+├── audio/                  # Issue #22
+│   ├── SoundManager.ts     # WebAudio + HTMLAudioElement で SFX/BGM、ミュート永続化
+│   └── MuteButton.ts       # canvas 右上常駐 (app.stage 直下、SceneManager.world と独立)
+└── persistence/            # Issue #56
+    ├── gameStateCodec.ts   # GameState ⇄ 文字列 の純粋 codec (バージョンエンベロープ + 検証つき deserialize、DOM 非依存)
+    └── saveStorage.ts      # localStorage 単一スロット save/load + URL ?state= 読取 (codec を包む不純アダプタ)
 index.html                  # <div id="root"></div> に canvas をマウント (+ Inter Web フォント読込)
 public/
 └── sounds/                 # SFX 7 種 + BGM 4 種を投入する (README.md 参照)
@@ -342,7 +346,7 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 
 ## テスト (Issue #18 / #20 / #17 / #19 / #21 / #22 / #31)
 
-Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`、`src/scenes/**`、`src/audio/**`** を jsdom 環境、それ以外は Node 環境で動かす。**現状 159 tests passing (12 files)**。
+Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`、`src/scenes/**`、`src/audio/**`** を jsdom 環境、それ以外は Node 環境で動かす (純粋コア `src/persistence/gameStateCodec.test.ts` は Node、localStorage/URL を使う `src/persistence/saveStorage.test.ts` はファイル冒頭の `// @vitest-environment jsdom` ディレクティブで個別に jsdom 指定)。**現状 271 tests passing (14 files)**。
 
 テスト対象:
 
@@ -358,6 +362,8 @@ Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`s
 - `src/scenes/TitleScene.test.ts` — `attachInputs(KeyboardManager)` 経由で 1 / 2 / Escape / Enter が `onSelect('single' / 'versus' / 'exit' / 'single')` を発火することを検証 (jsdom)。
 - `src/scenes/ResultScene.test.ts` — R / Enter で `onRestart`、Escape で `onTitle` が呼ばれること、全 kind (cleared/gameover/win/lose) でコンストラクタが通ること、unsubscribe 後はキーが無効になることを検証 (jsdom)。
 - `src/audio/SoundManager.test.ts` — ミュート状態の persist/load、404 graceful、`playSfx` のクローン再生、`playBgm` の loop / cross-fade、`unlock` の AudioContext.resume と再 play を検証 (jsdom + HTMLAudioElement モック)。
+- `src/persistence/gameStateCodec.test.ts` — serialize→deserialize の往復同一性 (空盤 / 全セル / float row / 負速度 / 各 status / 最小盤、参照非共有)、URL セーフ性 (生 `{}"`空白なし)、`deserializeGameState` の検証分岐をデシジョンテーブルで網羅 (壊れ JSON / バージョン不一致 / 寸法不整合 / セル値 0・8 / fallingBlock の col・row 境界 -1/境界/+1 / velocity 負値は受理 / status 妥当性) し不正は null 返却。再開可能性の純粋述語も検証 (`isResumableStatus`: playing/paused→true・cleared/gameover→false、`pickResumableState`: URL 優先→localStorage フォールバック→終端棄却の順序)。冪等・無副作用も検証 (Node、92 ケース)。
+- `src/persistence/saveStorage.test.ts` — localStorage 単一スロットの save/load 往復・キー非衝突・空/壊れ/検証 NG スロット → null、`setItem`/`getItem`/`removeItem` の throw 握りつぶし、`readGameStateFromUrl` の抽出・欠落・先頭 `?` 有無、`toStateQueryParam` の二重 encode なし結合 round-trip を検証 (jsdom、20 ケース)。
 
 **未カバー (TODO)**: VersusScene の対戦ロジック (お邪魔送信 `transferGarbage`、勝敗判定 `handleEnd`)、`PlayerBoard` の `consumePendingGarbage` / `garbageReceived`。レビュー指摘 (Phase 3 review) で should レベルとして特定済み、別 Issue で対応。
 
