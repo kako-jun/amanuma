@@ -28,7 +28,10 @@ import {
   saveGameState,
   STATE_QUERY_PARAM,
 } from './persistence/saveStorage'
-import { isResumableStatus, pickResumableState } from './persistence/gameStateCodec'
+import {
+  isResumableStatus,
+  pickResumableState,
+} from './persistence/gameStateCodec'
 import { generateBlockValue } from './game/randomBlocks'
 import { SoundManager } from './audio/SoundManager'
 import { MuteButton } from './audio/MuteButton'
