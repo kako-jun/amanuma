@@ -26,7 +26,9 @@ import {
   readGameStateFromUrl,
   loadGameState,
   saveGameState,
+  STATE_QUERY_PARAM,
 } from './persistence/saveStorage'
+import { isResumableStatus, pickResumableState } from './persistence/gameStateCodec'
 import { generateBlockValue } from './game/randomBlocks'
 import { SoundManager } from './audio/SoundManager'
 import { MuteButton } from './audio/MuteButton'
@@ -148,6 +150,11 @@ async function bootstrap(): Promise<void> {
   /**
    * fallingBlock 未設定の state に Next ベースで 1 個補充する (破壊的)。
    * 既に fallingBlock があればそのまま返す (= 復元時の中断局面を保つ)。
+   *
+   * should#3 / immutable 規約の例外: ここで破壊的 mutate しても安全。引数の state は
+   * `buildGameStateFromPuzzle` か `deserializeGameState` が新規生成した別オブジェクトで、
+   * 復元経路 (deserialize) でも往復ごとに参照非共有な fresh オブジェクトが渡るため、
+   * 外部の共有 state を書き換える恐れがない (GameState.ts の immutable 規約に抵触しない)。
    */
   function ensureFalling(state: GameState): GameState {
     if (state.fallingBlock === null) {
@@ -222,19 +229,27 @@ async function bootstrap(): Promise<void> {
   // 復元起動 + 自動セーブ (Issue #56)
   // --------------------------------------------------------------------
   // 起動時に URL クエリ `?state=` または localStorage セーブが「有効なときだけ」
-  // シングルプレイを復元起動する。無効 / 不在なら上の title スナップのまま。
-  const restoreState = resolveRestoreState()
-  if (restoreState !== null) {
-    startSingle(restoreState)
+  // シングルプレイを復元起動する。無効 / 不在 / 終端状態なら上の title スナップのまま。
+  const restore = resolveRestoreState()
+  if (restore.state !== null) {
+    startSingle(restore.state)
+    // should#2 / question#5: URL `?state=` からの復元に成功したら、その param だけ
+    // 除去して以降は localStorage を正本にする。これをしないと共有 URL が毎リロード
+    // 優先され続け、その間の localStorage 進捗を握り潰してしまう。
+    if (restore.fromUrl) stripStateQueryParam()
   }
 
   // 最小限の保存トリガ: ページが非表示になる直前に、シングルプレイ中の
   // 現局面を localStorage に自動セーブする。入力体系・UI は変更しない。
+  // must#1: 終端状態 (cleared / gameover) は保存しない。保存すると次回起動で
+  // 復元され fallingBlock が落ちず操作不能に固まる。playing / paused のみ保存対象。
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'hidden') return
       const state = gameScene.getState()
-      if (state !== null) saveGameState(state)
+      if (state !== null && isResumableStatus(state.status)) {
+        saveGameState(state)
+      }
     })
   }
 
@@ -289,13 +304,40 @@ async function bootstrap(): Promise<void> {
   }
 
   /**
-   * 復元用の GameState を解決する (Issue #56)。
+   * 復元用の GameState を解決する (Issue #56)。I/O を担う薄いラッパで、
+   * 優先順位・終端棄却の判定そのものは純粋コアの `pickResumableState` に委ねる。
+   *
    * 優先順位: URL クエリ `?state=` → localStorage セーブスロット。
-   * いずれも不在 / 検証 NG なら null を返し、呼び出し側は通常のお題ロードに
-   * フォールバックする。検証は永続化層 (純粋コア) に委ねている。
+   * 終端状態 (cleared / gameover) は採用しない (must#1)。検証も永続化層に委ねている。
+   *
+   * @returns 採用した state (なければ null) と、それが URL 由来か (URL 除去判定用)。
    */
-  function resolveRestoreState(): GameState | null {
-    return readGameStateFromUrl() ?? loadGameState()
+  function resolveRestoreState(): {
+    state: GameState | null
+    fromUrl: boolean
+  } {
+    const urlState = readGameStateFromUrl()
+    const localState = loadGameState()
+    const picked = pickResumableState(urlState, localState)
+    return { state: picked, fromUrl: picked !== null && picked === urlState }
+  }
+
+  /**
+   * URL から `?state=` パラメータだけを除去する (他のクエリは保持)。
+   * history / location 不在環境 (テスト / SSR) でも落ちないよう typeof ガードする。
+   * 復元成功時 (URL 由来) のみ呼ぶ。
+   */
+  function stripStateQueryParam(): void {
+    if (typeof window === 'undefined' || typeof history === 'undefined') return
+    if (!window.location || typeof history.replaceState !== 'function') return
+    try {
+      const url = new URL(window.location.href)
+      if (!url.searchParams.has(STATE_QUERY_PARAM)) return
+      url.searchParams.delete(STATE_QUERY_PARAM)
+      history.replaceState(history.state, '', url.toString())
+    } catch {
+      /* 不正 URL 等は握りつぶす (復元自体は成功済み) */
+    }
   }
 
   /**
@@ -336,6 +378,9 @@ async function bootstrap(): Promise<void> {
     const s1 = r1.ok ? r1.state : createInitialGameState()
     const s2 = r2.ok ? r2.state : createInitialGameState()
     // どちらも fallingBlock 未設定なら Next で補充。
+    // should#3 / immutable 規約の例外: s1/s2 は buildGameStateFromPuzzle か
+    // createInitialGameState がここで新規生成した別オブジェクトなので、破壊的 mutate
+    // しても外部の共有 state を書き換えない (GameState.ts の immutable 規約に抵触しない)。
     for (const s of [s1, s2]) {
       if (s.fallingBlock === null) {
         s.fallingBlock = {
