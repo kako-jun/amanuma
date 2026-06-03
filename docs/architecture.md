@@ -37,13 +37,14 @@ src/
 │   └── loadPuzzle.ts       # listPuzzles / getPuzzleById / buildGameStateFromPuzzle / PuzzleRotation
 ├── scenes/
 │   ├── SceneManager.ts     # 巨大誌面 (world) と navigateTo() による cubicInOut tween (Issue #21)
-│   ├── PlayerBoard.ts      # 1 プレイヤー分の物理・連鎖・スポーン・着水演出 (Issue #21 で抽出)
+│   ├── PlayerBoard.ts      # 1 プレイヤー分の物理・連鎖・スポーン + レイアウト統括 (演出は BoardEffects に委譲, Issue #21/#57)
 │   ├── GameScene.ts        # シングル用シーン (PlayerBoard を 1 個保持する薄いラッパ)
 │   ├── VersusScene.ts      # 対戦用シーン (PlayerBoard を 2 個 + お邪魔送信 MVP, Issue #21)
 │   ├── TitleScene.ts       # タイトル画面 (グラスボタン 3 種, Issue #21)
 │   ├── ResultScene.ts      # リザルト画面 (cleared/gameover/win/lose 表示, Issue #21)
 │   ├── BoardRenderer.ts    # PIXI.Graphics でボード・ブロック描画 + 斜光ライティング + shake API
 │   └── effects/
+│       ├── BoardEffects.ts         # 盤面演出の統括 (spawn/land/clear イベント → 波紋・泡・シェイク発火, Issue #57)
 │       ├── BeakerFrame.ts          # ビーカー (口広・底細台形) ガラス枠 + 水中青み overlay (Issue #31)
 │       ├── BubbleParticleSystem.ts # 泡パーティクル (spawn/land/clear, Issue #17/#19)
 │       └── WaterSurface.ts         # 水面 sin 波 + 局所波紋 + 光の筋 (Issue #17/#31)
@@ -344,7 +345,21 @@ PIXI の `Container` は `EventEmitter` を継承するため、`emit()` 名は�
 - 連鎖カウント表示は別 Issue。
 - 音は #22。
 
-## テスト (Issue #18 / #20 / #17 / #19 / #21 / #22 / #31)
+## 盤面演出の統括 (Issue #57)
+
+dev-doctrine 監査 (規律3: 単一責務) で、`PlayerBoard` が物理・連鎖・スポーン・入力に加えて「気泡 emit / 着水波紋 / 盤面シェイク」の演出発火まで一身に抱えていた点を切り出す。演出発火を `effects/BoardEffects.ts` に集約し、`PlayerBoard` は「レイアウト (各サブシステムの生成・レイヤー配置・破棄) + 統括 + 進行 (物理/連鎖/スポーン/入力)」に責務を絞る。
+
+設計判断:
+
+- **API はゲームイベント語彙**: `onSpawn(col)` / `onLand(row, col)` / `onClear(positions)` / `update(deltaMS)` / `destroy(options)`。`PlayerBoard` は演出が要る局面で `this.boardEffects?.onXxx(...)` を呼ぶだけで、`emitBubbles` / `splash` / `shake` を直叩きしない (互換ラッパは残さない)。
+- **座標変換は BoardEffects 側**: 「col → セル中心ピクセル (`col*CELL_SIZE + CELL_SIZE/2`)」「clear positions の key (`row*cols+col`) 復元」など演出固有の計算は BoardEffects が持つ。`CELL_SIZE` 依存は BoardEffects に閉じる。
+- **所有権の移譲**: `WaterSurface` / `BubbleParticleSystem` の生成・破棄 (所有) を BoardEffects に移す。`PlayerBoard.initWithState` は両者を生成して addChild (= レイヤー順の制御は統括責務として PlayerBoard が保持) した直後に BoardEffects へ引き渡し、`destroy` 時は `boardEffects.destroy(options)` で破棄する。
+- **`BoardRenderer` は所有しない**: 盤面・ブロック描画は別責務なので BoardEffects は `BoardRenderer` を持たず、シェイクだけを `ShakeTarget { shake(row, col) }` インターフェース越しに委譲する (循環依存も回避)。
+- **SFX はスコープ外**: `SoundManager` はゲームイベント音であり視覚演出層とは別概念のため BoardEffects に含めない。`block-spawn` / `block-land` 等の SFX 発火は引き続き `PlayerBoard` が演出イベント呼び出しと同じ箇所で行う (Issue #57 はあくまで視覚演出の切り出し)。
+
+挙動は完全不変: 同じイベントで同じ引数 (intensity / count / kind / 座標) の演出が出る。`BoardEffects.test.ts` が各 API → 下位サブシステムの引数を縛り、`PlayerBoard.test.ts` / `VersusScene.test.ts` / `ChainRunner.order.test.ts` が進行ロジックの安全網になる。
+
+## テスト (Issue #18 / #20 / #17 / #19 / #21 / #22 / #31 / #57)
 
 Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`src/input/**`、`src/scenes/**`、`src/audio/**`** を jsdom 環境、それ以外は Node 環境で動かす (純粋コア `src/persistence/gameStateCodec.test.ts` は Node、localStorage/URL を使う `src/persistence/saveStorage.test.ts` はファイル冒頭の `// @vitest-environment jsdom` ディレクティブで個別に jsdom 指定)。**現状 271 tests passing (14 files)**。
 
