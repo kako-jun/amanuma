@@ -7,8 +7,10 @@
  *
  * 責務:
  * - GameState の保持と毎フレームの物理/連鎖進行
- * - BoardRenderer / WaterSurface / BubbleParticleSystem の生成・破棄
- * - 着水時の演出発火 (波紋・泡・横揺れ)
+ * - レイアウト (BoardRenderer / WaterSurface / BubbleParticleSystem / BeakerFrame の
+ *   生成・レイヤー配置・破棄) と各サブシステムの統括
+ * - 演出 (波紋・泡・横揺れ) は `BoardEffects` に委譲し、意味のあるイベント
+ *   (`onSpawn` / `onLand` / `onClear`) を発火するだけにする (Issue #57)
  * - 連鎖時の clear 演出フックと、(対戦用) 消去数の通知
  * - cleared / gameover への遷移検知
  *
@@ -27,6 +29,7 @@ import type { GameState } from '../types/GameState'
 import { CELL_SIZE } from '../constants/colors'
 import { BoardRenderer } from './BoardRenderer'
 import { BeakerFrame } from './effects/BeakerFrame'
+import { BoardEffects } from './effects/BoardEffects'
 import { BubbleParticleSystem } from './effects/BubbleParticleSystem'
 import { WaterSurface } from './effects/WaterSurface'
 import { stepUnderwaterPhysics } from '../physics/UnderwaterPhysics'
@@ -67,9 +70,13 @@ export interface PlayerBoardCallbacks {
 export class PlayerBoard extends Container {
   private state: GameState | null = null
   private renderer: BoardRenderer | null = null
-  private water: WaterSurface | null = null
-  private bubbles: BubbleParticleSystem | null = null
   private beaker: BeakerFrame | null = null
+  /**
+   * 演出統括 (Issue #57)。WaterSurface / BubbleParticleSystem を所有し、
+   * spawn / land / clear のイベント発火と毎フレーム更新を引き受ける。
+   * PlayerBoard 側から emitBubbles / splash / shake を直叩きしない。
+   */
+  private boardEffects: BoardEffects | null = null
   private isChaining: boolean = false
   /** 連鎖中に「あとで送るお邪魔」のキュー。対戦時に相手に伝えるための一時バッファ。 */
   private pendingGarbageOut: number = 0
@@ -113,13 +120,9 @@ export class PlayerBoard extends Container {
       this.renderer.destroy({ children: true })
       this.renderer = null
     }
-    if (this.water) {
-      this.water.destroy({ children: true })
-      this.water = null
-    }
-    if (this.bubbles) {
-      this.bubbles.destroy({ children: true })
-      this.bubbles = null
+    if (this.boardEffects) {
+      this.boardEffects.destroy({ children: true })
+      this.boardEffects = null
     }
     if (this.beaker) {
       this.beaker.destroy({ children: true })
@@ -148,17 +151,20 @@ export class PlayerBoard extends Container {
     this.addChild(renderer)
     this.renderer = renderer
 
+    // 演出レイヤー (水面 → 泡) は盤面の上、ビーカー前面の下に重ねる。
+    // レイヤー配置 (addChild 順) は統括責務として PlayerBoard が持ち、
+    // 「いつ・どの引数で発火するか」は BoardEffects に委譲する (Issue #57)。
     const water = new WaterSurface(boardWidthPx)
     water.x = 0
     water.y = 0
     this.addChild(water)
-    this.water = water
 
     const bubbles = new BubbleParticleSystem()
     bubbles.x = 0
     bubbles.y = 0
     this.addChild(bubbles)
-    this.bubbles = bubbles
+
+    this.boardEffects = new BoardEffects(water, bubbles, renderer, state.cols)
 
     // ガラスの輪郭・ハイライトは最前面に。盤面・水面・泡の上に乗せる。
     const beakerFront = beaker.getFrontLayer()
@@ -167,7 +173,8 @@ export class PlayerBoard extends Container {
     this.addChild(beakerFront)
 
     if (state.fallingBlock !== null) {
-      this.emitSpawnEffect(state.fallingBlock.col)
+      this.boardEffects.onSpawn(state.fallingBlock.col)
+      this.soundManager?.playSfx('block-spawn')
     }
   }
 
@@ -191,15 +198,13 @@ export class PlayerBoard extends Container {
     const state = this.state
     if (state === null) {
       this.renderer?.update()
-      this.water?.update()
-      this.bubbles?.update(ticker.deltaMS)
+      this.boardEffects?.update(ticker.deltaMS)
       return
     }
 
     if (state.status !== 'playing') {
       this.renderer?.update()
-      this.water?.update()
-      this.bubbles?.update(ticker.deltaMS)
+      this.boardEffects?.update(ticker.deltaMS)
       return
     }
 
@@ -215,14 +220,14 @@ export class PlayerBoard extends Container {
         const landedCol = state.fallingBlock.col
         state.fallingBlock.row = landingRow
         lockFallingBlock(state)
-        this.emitLandEffect(landingRow, landedCol)
+        this.boardEffects?.onLand(landingRow, landedCol)
+        this.soundManager?.playSfx('block-land')
         this.startChainSequence()
       }
     }
 
     this.renderer?.update()
-    this.water?.update()
-    this.bubbles?.update(ticker.deltaMS)
+    this.boardEffects?.update(ticker.deltaMS)
   }
 
   /**
@@ -239,7 +244,7 @@ export class PlayerBoard extends Container {
       // 旧実装の `state.chainCount + 1` 推定 (clearCells 前は chainCount が未更新)
       // は脆かったため、引数で受け取る方式に統一。
       onClear: (positions, chainLevel) => {
-        this.emitClearBubbles(positions)
+        this.boardEffects?.onClear(positions)
         const cleared = positions.size
         this.callbacks.onChain?.(cleared, chainLevel)
         // お邪魔送信 MVP: floor(clearedCount / 3)。
@@ -280,7 +285,8 @@ export class PlayerBoard extends Container {
         velocity: 0,
       }
       state.nextBlock = generateBlockValue()
-      this.emitSpawnEffect(spawnCol)
+      this.boardEffects?.onSpawn(spawnCol)
+      this.soundManager?.playSfx('block-spawn')
       this.isChaining = false
     })
   }
@@ -370,54 +376,13 @@ export class PlayerBoard extends Container {
     }
   }
 
-  // ----------------------------------------------------------------------
-  // 演出 (旧 GameScene と同じ実装)
-  // ----------------------------------------------------------------------
-
-  private emitSpawnEffect(col: number): void {
-    const state = this.state
-    if (state === null) return
-    const xPx = col * CELL_SIZE + CELL_SIZE / 2
-    this.water?.splash(xPx, 0.7)
-    this.bubbles?.emitBubbles({ x: xPx, y: 0, kind: 'spawn', count: 3 })
-    this.soundManager?.playSfx('block-spawn')
-  }
-
-  private emitClearBubbles(positions: Set<number>): void {
-    const state = this.state
-    if (state === null || this.bubbles === null) return
-    const cols = state.cols
-    const COUNT_PER_CELL = 4
-    for (const key of positions) {
-      const row = Math.floor(key / cols)
-      const col = key % cols
-      const xPx = col * CELL_SIZE + CELL_SIZE / 2
-      const yPx = row * CELL_SIZE + CELL_SIZE / 2
-      this.bubbles.emitBubbles({
-        x: xPx,
-        y: yPx,
-        kind: 'clear',
-        count: COUNT_PER_CELL,
-      })
-    }
-  }
-
-  private emitLandEffect(row: number, col: number): void {
-    const xPx = col * CELL_SIZE + CELL_SIZE / 2
-    this.water?.splash(xPx, 1.0)
-    const landY = row * CELL_SIZE + CELL_SIZE / 2
-    this.bubbles?.emitBubbles({ x: xPx, y: landY, kind: 'land', count: 4 })
-    this.renderer?.shake(row, col)
-    this.soundManager?.playSfx('block-land')
-  }
-
   /** PIXI の destroy をオーバーライドして state を解放する。 */
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
+    this.boardEffects?.destroy(options)
     super.destroy(options)
     this.state = null
     this.renderer = null
-    this.water = null
-    this.bubbles = null
+    this.boardEffects = null
     this.beaker = null
   }
 }
