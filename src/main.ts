@@ -204,7 +204,6 @@ async function bootstrap(): Promise<void> {
     {
       onP1Win: () => showResult({ kind: 'win' }),
       onP2Win: () => showResult({ kind: 'lose' }),
-      onDraw: () => showResult({ kind: 'lose' }),
     },
     sound
   )
