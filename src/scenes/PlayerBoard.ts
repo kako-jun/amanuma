@@ -261,6 +261,10 @@ export class PlayerBoard extends Container {
         return
       }
 
+      // 終端 status (cleared / gameover) の確定はこの runChain 継続内でのみ行う。
+      // VersusScene の settled 先着不変条件 (引き分け不在・Issue #60) がこれに
+      // 依存しているため、同期的な gameover パス等を足すときは onDraw 撤去判断を
+      // 再検討すること。
       if (countSevens(state) === 0) {
         state.status = 'cleared'
         this.isChaining = false
