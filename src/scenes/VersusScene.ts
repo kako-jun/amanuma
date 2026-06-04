@@ -38,9 +38,20 @@ export interface VersusSceneCallbacks {
   onP1Win?: () => void
   /** P2 が勝った直後に呼ばれる。 */
   onP2Win?: () => void
-  /** 引き分け (両者同時 cleared / gameover) で呼ばれる。 */
-  onDraw?: () => void
 }
+
+// 引き分け (onDraw) は提供しない (Issue #60)。
+// 各 PlayerBoard の cleared / gameover は `runChain(...).then(...)` という
+// 非同期継続の中で「`state.status` を確定 → コールバック発火」を 1 継続内で
+// 不可分に行う。2 つの盤面の継続は単一スレッドのイベントループ上で必ず逐次
+// 実行されるため、先に走った継続が `settled` を立て、後続の handleEnd は
+// no-op になる。「両者の status が確定済みだがどちらのコールバックも未発火」
+// という瞬間は構造的に存在しない (= 先着 handleEnd 時点で相手は常に未終端)。
+// したがって「同一フレーム同時終了」はこの設計では観測不能であり、onDraw を
+// 残すと「決して発火しない分岐」を足す別種の dead code になる。引き分けを真に
+// 表現するには status 確定とコールバックの分離 + ポーリングによる終了検知の
+// 作り直しが必要で、本 Issue の範囲を超える。よって onDraw は撤去し、勝敗は
+// 先着確定 (cleared→自分勝ち / 相手 gameover→自分勝ち) の二分岐に統一する。
 
 export class VersusScene extends Container {
   readonly p1: PlayerBoard
@@ -226,7 +237,9 @@ export class VersusScene extends Container {
    * - cleared: その側の勝ち (相手の状態に関わらず先に消し切った方の勝利)。
    * - gameover: 相手の勝ち。
    *
-   * 既に確定済みなら no-op。
+   * 既に確定済みなら no-op。引き分けは扱わない (Issue #60。`VersusSceneCallbacks`
+   * 付近のコメント参照: 2 盤面の終了通知はイベントループ上で必ず逐次発火するため
+   * 先着で勝者が確定し、同時終了は構造的に観測できない)。
    */
   private handleEnd(side: 'p1' | 'p2', kind: 'cleared' | 'gameover'): void {
     if (this.settled) return

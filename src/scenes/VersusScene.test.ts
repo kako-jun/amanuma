@@ -4,6 +4,8 @@
  * 対象:
  * - `transferGarbage`: from の pendingGarbageOut を consume して to に送る量計算。
  * - `handleEnd`: cleared / gameover からの勝敗判定と `settled` ガード。
+ * - 引き分け (onDraw) が存在しないこと (Issue #60 で撤去。同時終了は構造的に観測
+ *   不能なため、勝敗は先着確定の二分岐に統一)。
  *
  * `transferGarbage` / `handleEnd` は private のため、ブラケットアクセスで直接叩く。
  * 本来の発火経路 (PlayerBoard の onChain/onCleared/onGameOver) は `runChain` の
@@ -45,12 +47,10 @@ describe('VersusScene.handleEnd 勝敗判定 (S12)', () => {
   it('P1 が cleared → P1 勝ち (onP1Win)', () => {
     const onP1Win = vi.fn()
     const onP2Win = vi.fn()
-    const onDraw = vi.fn()
-    scene = new VersusScene({ onP1Win, onP2Win, onDraw })
+    scene = new VersusScene({ onP1Win, onP2Win })
     internals(scene).handleEnd('p1', 'cleared')
     expect(onP1Win).toHaveBeenCalledTimes(1)
     expect(onP2Win).not.toHaveBeenCalled()
-    expect(onDraw).not.toHaveBeenCalled()
   })
 
   it('P2 が cleared → P2 勝ち (onP2Win)', () => {
@@ -107,20 +107,41 @@ describe('VersusScene.handleEnd 勝敗判定 (S12)', () => {
     expect(onP1Win).toHaveBeenCalledTimes(1)
   })
 
-  it('現状 onDraw は handleEnd から到達不能 (settled 先着で必ず勝者が決まる)', () => {
-    // 注意: VersusSceneCallbacks に onDraw は宣言されているが、handleEnd の
-    // 現行実装では cleared→自分勝ち / gameover→相手勝ち の二分岐しかなく、
-    // 「引き分け」へ分岐するコードパスが存在しない。両者同時終了は settled
-    // ガードで先着勝ちに収束する。実装が引き分けに対応したらこのテストを
-    // 「両者同時 → onDraw」へ書き換える。プロダクションコードは未変更。
+  it('引き分けは仕様外: 両者同時終了でも先着勝ちに収束する (Issue #60 で onDraw 撤去)', () => {
+    // Issue #60 決着: 引き分け (onDraw) は撤去した。2 盤面の cleared / gameover は
+    // `runChain(...).then(...)` の非同期継続内で「status 確定 → コールバック発火」を
+    // 不可分に行い、イベントループ上で必ず逐次実行されるため、先着が settled を立てて
+    // 勝者を確定し、後続の handleEnd は no-op になる。「同一フレーム同時終了」は
+    // 構造的に観測できないので、引き分けはこの設計に存在しない概念として確定させた。
+    //
+    // ここでは「両者がほぼ同時に終了通知してきても」先着勝ちに収束することを縛る
+    // (p1 cleared が先着 → p1 勝ち。続く p2 gameover は settled で無視)。
     const onP1Win = vi.fn()
     const onP2Win = vi.fn()
-    const onDraw = vi.fn()
-    scene = new VersusScene({ onP1Win, onP2Win, onDraw })
+    scene = new VersusScene({ onP1Win, onP2Win })
     internals(scene).handleEnd('p1', 'cleared')
     internals(scene).handleEnd('p2', 'gameover')
-    expect(onDraw).not.toHaveBeenCalled()
     expect(onP1Win).toHaveBeenCalledTimes(1)
+    expect(onP2Win).not.toHaveBeenCalled()
+  })
+
+  it('VersusSceneCallbacks に onDraw が存在しない (撤去の型レベル回帰防止)', () => {
+    // 撤去後に onDraw が再導入されたら型として検知できるよう、余剰プロパティ
+    // チェックを効かせて縛る。VersusSceneCallbacks に onDraw が再び宣言されると
+    // 下の @ts-expect-error が「未使用の抑制」になり tsc が失敗する = 回帰検知。
+    const onP1Win = vi.fn()
+    const onP2Win = vi.fn()
+    scene = new VersusScene({
+      onP1Win,
+      onP2Win,
+      // @ts-expect-error onDraw は Issue #60 で撤去済み。再導入されたらこの行が
+      // 型エラーでなくなり @ts-expect-error が浮く → ビルドが赤くなる。
+      onDraw: () => {},
+    })
+    // ランタイムでも、勝敗確定は P1/P2 の二者のみで完結する。
+    internals(scene).handleEnd('p2', 'gameover')
+    expect(onP1Win).toHaveBeenCalledTimes(1)
+    expect(onP2Win).not.toHaveBeenCalled()
   })
 })
 
