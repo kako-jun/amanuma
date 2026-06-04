@@ -380,7 +380,7 @@ Vitest を導入した。`vitest.config.ts` の `environmentMatchGlobs` で **`s
 - `src/persistence/gameStateCodec.test.ts` — serialize→deserialize の往復同一性 (空盤 / 全セル / float row / 負速度 / 各 status / 最小盤、参照非共有)、URL セーフ性 (生 `{}"`空白なし)、`deserializeGameState` の検証分岐をデシジョンテーブルで網羅 (壊れ JSON / バージョン不一致 / 寸法不整合 / セル値 0・8 / fallingBlock の col・row 境界 -1/境界/+1 / velocity 負値は受理 / status 妥当性) し不正は null 返却。再開可能性の純粋述語も検証 (`isResumableStatus`: playing/paused→true・cleared/gameover→false、`pickResumableState`: URL 優先→localStorage フォールバック→終端棄却の順序)。冪等・無副作用も検証 (Node、92 ケース)。
 - `src/persistence/saveStorage.test.ts` — localStorage 単一スロットの save/load 往復・キー非衝突・空/壊れ/検証 NG スロット → null、`setItem`/`getItem`/`removeItem` の throw 握りつぶし、`readGameStateFromUrl` の抽出・欠落・先頭 `?` 有無、`toStateQueryParam` の二重 encode なし結合 round-trip を検証 (jsdom、20 ケース)。
 
-**未カバー (TODO)**: VersusScene の対戦ロジック (お邪魔送信 `transferGarbage`、勝敗判定 `handleEnd`)、`PlayerBoard` の `consumePendingGarbage` / `garbageReceived`。レビュー指摘 (Phase 3 review) で should レベルとして特定済み、別 Issue で対応。
+**カバー済み** (Phase 3 review の should 指摘を #54 / #55 で解消): VersusScene の対戦ロジック (お邪魔送信 `transferGarbage`、勝敗判定 `handleEnd`)、`PlayerBoard` の `consumePendingGarbage` / `garbageReceived`、ChainRunner の `onClear` 順序を `VersusScene.test.ts` / `PlayerBoard.test.ts` / `ChainRunner.order.test.ts` でカバー (#54 / #55)。
 
 ```bash
 npm test          # 1 回実行
@@ -486,6 +486,7 @@ PlayerBoard.garbageReceived(count)
 - `cleared` (= 残 7 が 0): **その側の勝ち** (先に消し切った方の勝利)。
 - `gameover` (= スポーン位置に既にブロックがある): **相手の勝ち**。
 - どちらかが確定したら `settled = true` で以後のコールバックを抑止する。
+- **引き分けは扱わない** (Issue #60 で `onDraw` 撤去)。2 盤面の終了通知は単一スレッドのイベントループ上で必ず逐次発火し、先に走った継続が `settled` を立てて先着で勝者を確定する。「同一フレーム同時終了」は構造的に観測不能なため、引き分け分岐は決して発火しない dead code になる (詳細は `VersusScene.ts` 冒頭コメント)。
 
 ### 本 Issue ではやらないこと
 

@@ -47,6 +47,13 @@ Issue #10 を親に、#11〜#23 / #29 / #31 の連続 PR で実装。
 
 ---
 
+## Phase 3.5: 復元経路・テスト拡充・リファクタ (2026-06)
+
+- `GameState` の任意局面復元 (URL クエリ / セーブデータ) 経路を追加 (#56 / #58)
+- VersusScene 勝敗判定・PlayerBoard お邪魔・ChainRunner.delay 順序のテスト追加 (#54, #55)
+- `PlayerBoard` から演出システム `BoardEffects` を切り出し (#57)
+- 引き分け (`onDraw`) を撤去し勝敗を先着確定に統一 (#60)
+
 ## Phase 2 (Phaser 版): 対戦モード (2025-11-17)
 
 > Phaser 版時代の履歴。`git log main` でコード履歴を参照可能。
